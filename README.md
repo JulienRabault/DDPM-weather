@@ -132,7 +132,7 @@ DATA_DIR="/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_
 
 La derniere ligne aussi !
 
-#### 2. Modifier les parametres selon `Options Disponibles`
+#### 2. Modifier les parametres selon [Options Disponibles](#options-disponibles)
 Derniere ligne, mettre `|` entres les parametres
 ```
 srun -w $(hostname -s) --nodes=1 --ntasks-per-node=1 --ntasks=1 $SLURM_SCRIPT primary $HOROVOD_CONTAINER $UID $GID $HOME_DIR $OUTPUT_DIR $DATA_DIR $PYTHON_SCRIPT "Train|--v_i | 3 | --data_dir| "/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"| --train_name |"/scratch/mrmn/rabaultj/DDPM-for-meteo/test" |--epochs | 10 |--batch_size | 16 |--any_time | 50 "
@@ -157,7 +157,7 @@ DATA_DIR="/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_
 
 La derniere ligne aussi !
 
-#### 2. Modifier les parametres selon `Options Disponibles`
+#### 2. Modifier les parametres selon [Options Disponibles](#options-disponibles)
 
 ```
 PYTHON_SCRIPT="${HOME_DIR}main.py"
