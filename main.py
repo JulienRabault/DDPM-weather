@@ -226,7 +226,7 @@ if __name__ == "__main__":
                         help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
     parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate')
     parser.add_argument('--adam_betas', type=tuple, default=(0.9, 0.99), help='Betas for the Adam optimizer')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs to train for')
+    parser.add_argument('--epochs', type=int, default=150, help='Number of epochs to train for')
     parser.add_argument('--image_size', type=int, default=128, help='Size of the image')
     parser.add_argument('--data_dir', type=str, default='data/', help='Directory containing the data')
     parser.add_argument('--v_i', type=int, default=3, help='Number of variable indices')
@@ -243,6 +243,7 @@ if __name__ == "__main__":
                         help="Automatically normalize")
     parser.add_argument("--scheduler", dest="scheduler", default=False, action="store_true",
                         help="Use scheduler for learning rate")
+    parser.add_argument('--scheduler_epoch', type=int, default=150, help='Number of epochs for scheduler to down scale (save for resume')
     parser.add_argument("-r", "--resume", dest="resume", default=False, action="store_true",
                         help="Resume from checkpoint")
     parser.add_argument("--debug", dest="debug_log", default=False, action="store_true", help="Enable debug logs")

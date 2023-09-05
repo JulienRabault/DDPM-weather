@@ -33,6 +33,13 @@ Il vous sera demandé de saisir votre clef d'api, que vous pouvez trouver sur vo
 
 Ref : https://docs.wandb.ai/quickstart
 
+Attention a bien changer `wandbproject` et `entityWDB` selon votre compte wandb.
+Le suivi de WandB est offline par défaut. A la fin de l'entrainnement vous pouvez utiliser les commandes suivantes pour changer les données offline :
+
+```bash
+wandb sync <{config.train_name}/WANDB>
+```
+
 ## Utilisation
 
 Le code principal se trouve dans le fichier `main.py`. Il peut être exécuté avec différentes options de mode :
@@ -70,10 +77,17 @@ Vous pouvez personnaliser le comportement de ce code en utilisant les options su
 - `invert_norm` : Inverser la normalisation des échantillons d'images (par défaut : False).
 - `beta_schedule` : Le type de planification beta (cosinus ou linéaire) (par défaut : "cosinus").
 - `auto_normalize` : Normalisation automatique (par défaut : False).
-- `scheduler` : Utiliser un planificateur pour le taux d'apprentissage (par défaut : False).
+- `scheduler` : Utiliser un scheduler pour le taux d'apprentissage (par défaut : False).
+- `scheduler_epoch` : Le nombre d'époques pour le scheduler (par défaut : 150).
 - `resume` : Reprise depuis un point de contrôle (par défaut : False).
 - `debug_log` : Activer les journaux de débogage (par défaut : False).
 
+Pour reprendre un entraînement, 2 possibilités :
+
+- Partir d'un modèle pré-entraîné => le donner par `model_path`
+- Partir d'un modèle pré-entraîné ET continuer dans le même dossier d'entraînement => le donner par `model_path` ET utiliser `resume`
+
+Si vous voulez utiliser le scheduler, il faut utiliser `scheduler` et `scheduler_epoch` (par défaut : 150). Le scheduler est un scheduler de type `OneCycleLR` de PyTorch. Il est sauvegardé dans le fichier `.pt` et est utilisé pour reprendre l'entraînement, il faut donc lui donner le nombre total d'époques d'entraînement.
 
 ## Exemples
 
@@ -95,3 +109,71 @@ python main.py Test --train_name my_training_run --n_sample 50
 ```python
 python -m torch.distributed.run --standalone --nproc_per_node  mon_script.py Train --train_name my_training_run --batch_size 32 --lr 0.001 --epochs 50
 ```
+## Usage spécifique à PRIAM
+
+Il y a 2 fichiers `.slurm`, un pour faire des samples a partir d'un modele et un pour lancer un train. 
+
+### run_train.slurm
+
+#### 1. Modifier selon vos dossiers 
+
+Selon vos données et home_dir
+```
+HOME_DIR="/scratch/mrmn/rabaultj/DDPM-for-meteo/"
+DATA_DIR="/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"
+```
+```
+#SBATCH --job-name='train'        <-- Le nom du job
+#SBATCH --partition=node1         <-- La partition en fonction des dispo, node1 ou node3
+#SBATCH --gres=gpu:v100:2         <-- Le nombre de gpu voulu, max 4
+#SBATCH --error="train.err"       <-- Pour suivre l'entrainnement avec 'tail -f train.err' ou 'cat train.err'
+#SBATCH --output="train.err"      <-|
+```
+
+La derniere ligne aussi !
+
+#### 2. Modifier les parametres selon `Options Disponibles`
+Derniere ligne, mettre `|` entres les parametres
+```
+srun -w $(hostname -s) --nodes=1 --ntasks-per-node=1 --ntasks=1 $SLURM_SCRIPT primary $HOROVOD_CONTAINER $UID $GID $HOME_DIR $OUTPUT_DIR $DATA_DIR $PYTHON_SCRIPT "Train|--v_i | 3 | --data_dir| "/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"| --train_name |"/scratch/mrmn/rabaultj/DDPM-for-meteo/test" |--epochs | 10 |--batch_size | 16 |--any_time | 50 "
+```
+
+### run_sample.slurm
+
+#### 1. Modifier selon vos dossiers 
+
+Selon vos données et home_dir
+```
+HOME_DIR="/scratch/mrmn/rabaultj/DDPM-for-meteo/"
+DATA_DIR="/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"
+```
+```
+#SBATCH --job-name='sample_ddpm'        <-- Le nom du job
+#SBATCH --partition=node1         <-- La partition en fonction des dispo, node1 ou node3
+#SBATCH --gres=gpu:v100:2         <-- Le nombre de gpu voulu, max 4
+#SBATCH --error="Sample.err"       <-- Pour suivre l'entrainnement avec 'tail -f Sample.err' ou 'cat Sample.err'
+#SBATCH --output="Sample.err"      <-|
+```
+
+La derniere ligne aussi !
+
+#### 2. Modifier les parametres selon `Options Disponibles`
+
+```
+PYTHON_SCRIPT="${HOME_DIR}main.py"
+MODEL_DIR="Train_uv_final/best.pt"
+SAMPLE_DIR="Sample_final_uv"
+SCRATCH_DIR="/scratch/mrmn/rabaultj/"
+N_SAMPLES=10
+```
+
+Derniere ligne, mettre `|` entres les parametres
+```
+srun -w $(hostname -s) --nodes=1 --ntasks-per-node=1 --ntasks=1 $SLURM_SCRIPT primary $HOROVOD_CONTAINER $UID $GID $HOME_DIR $OUTPUT_DIR $DATA_DIR $PYTHON_SCRIPT "Test |--n_sample | ${N_SAMPLES} | --data_dir| /scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/| --train_name |/scratch/mrmn/rabaultj/DDPM-for-meteo/${SAMPLE_DIR} |--batch_size | 128 |--model_path | /scratch/mrmn/rabaultj/DDPM-for-meteo/${MODEL_DIR} "
+```
+## Lancement
+
+`sbatch run_train.slurm` ou `sbatch run_sample.slurm`
+
+
+

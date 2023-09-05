@@ -47,7 +47,7 @@ class Trainer:
         self.best_loss = float('inf')
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
-                                                                 epochs=750,
+                                                                 epochs=self.config.scheduler_epoch,
                                                                  steps_per_epoch=len(train_data),
                                                                  anneal_strategy="cos",
                                                                  pct_start=0.1,
