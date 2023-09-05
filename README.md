@@ -2,14 +2,11 @@
 
 Ce dépôt contient le code source d'un modèle de débruitage basé sur la diffusion probabiliste, implémenté en utilisant Python. Le modèle est conçu pour le débruitage d'images météorologiques.
 
-
-
 ## Installation
-### Warning
+### Attention
 
-Le code a etait testé avec `denoising-diffusion-pytorch==1.6.4`, les nouvelles versions de `denoising-diffusion-pytorch` provoquent des problemes de memoire gpu. 
-Le model est plus gros que la version de base.
-
+Le code a été testé avec `denoising-diffusion-pytorch==1.6.4`, les nouvelles versions de `denoising-diffusion-pytorch` provoquent des problèmes de mémoire GPU. 
+Le modèle est plus gros que la version de base.
 
 Vous pouvez installer les dépendances en exécutant la commande suivante :
 
@@ -17,7 +14,7 @@ Vous pouvez installer les dépendances en exécutant la commande suivante :
 pip install -r requirements.txt
 ```
 
-This code uses https://github.com/lucidrains/denoising-diffusion-pytorch
+Ce code utilise https://github.com/lucidrains/denoising-diffusion-pytorch.
 
 ### WandB pour le suivi de l'entraînement
 
@@ -28,7 +25,6 @@ Dans votre terminal, exécutez la commande suivante pour vous connecter à votre
 ```bash
 wandb login
 ```
-
 Il vous sera demandé de saisir votre clef d'api, que vous pouvez trouver sur votre compte WandB.
 
 Ref : https://docs.wandb.ai/quickstart
