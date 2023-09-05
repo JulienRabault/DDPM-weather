@@ -200,7 +200,7 @@ def main_train(config):
     if config.debug_log:
         print(f"\n#LOG: Training execution time: {total_time} seconds")
     if is_main_gpu():
-        trainer.sample_images(config, "last", nb_image=config.n_sample)
+        trainer.sample_images("last", nb_image=config.n_sample)
 
 
 def main_test(config):
@@ -212,7 +212,7 @@ def main_test(config):
     dataset, model, optimizer = load_train_objs(config)
     train_data = prepare_dataloader(dataset, config)
     trainer = Trainer(model, dataset, train_data, optimizer, config.model_path)
-    trainer.sample_images(config, nb_image=config.n_sample)
+    trainer.sample_images(nb_image=config.n_sample)
 
 
 if __name__ == "__main__":
