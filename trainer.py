@@ -12,7 +12,6 @@ import wandb
 from torchvision import transforms
 from tqdm import tqdm
 
-import DataSet_Handler
 from distributed import get_rank, is_main_gpu
 
 
@@ -28,8 +27,6 @@ class Trainer:
         Initialize the Trainer.
         Args:
             model (torch.nn.Module): The neural network model.
-            train_dataset (DataSet_Handler.ISDataset): The training dataset.
-            train_data: The training data.
             optimizer (torch.optim.Optimizer): The optimizer for model parameters.
             config: Configuration settings.
         """
@@ -164,12 +161,9 @@ class Trainer:
         torch.save(snapshot, path)
         print(f"#INFO : Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
 
-    def _init_wandb(self, config):
+    def _init_wandb(self):
         """
         Initialize WandB for logging training progress.
-        Args:
-            config: Configuration settings.
-
         Returns:
             None
         """
@@ -178,30 +172,28 @@ class Trainer:
 
         t = time.strftime("%d-%m-%y_%H-%M", time.localtime(time.time()))
         if self.config.resume:
-            wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'], entity=config.entityWDB,
+            wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'], entity=self.config.entityWDB,
                        name=f"{self.config.train_name}_{t}/",
-                       config={**vars(config), **{"optimizer": self.optimizer.__class__,
+                       config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                   "scheduler": self.scheduler.__class__,
                                                   "lr_base": self.optimizer.param_groups[0]["lr"],
                                                   "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
         else:
-            wandb.init(project=self.config.wp, entity=config.entityWDB, mode=os.environ['WANDB_MODE'],
+            wandb.init(project=self.config.wp, entity=self.config.entityWDB, mode=os.environ['WANDB_MODE'],
                        name=f"{self.config.train_name}_{t}/",
-                       config={**vars(config), **{"optimizer": self.optimizer.__class__,
+                       config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                   "scheduler": self.scheduler.__class__,
                                                   "lr_base": self.optimizer.param_groups[0]["lr"],
                                                   "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
 
-    def train(self, config):
+    def train(self):
         """
         Start the training process.
-        Args:
-            config: Configuration settings.
         Returns:
             None
         """
         if is_main_gpu():
-            self._init_wandb(config)
+            self._init_wandb()
             loop = tqdm(range(self.epochs_run, self.config.epochs + self.epochs_run),
                         desc=f"Training...", unit="epoch", postfix="")
         else:
@@ -211,7 +203,7 @@ class Trainer:
             avg_loss = self._run_epoch(epoch)
             if is_main_gpu():
                 loop.set_postfix_str(
-                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if config.scheduler else config.lr):.6f}")
+                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}")
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
@@ -228,12 +220,12 @@ class Trainer:
 
         if is_main_gpu():
             wandb.finish()
+            print(f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.train_name}', 'best.pt')}")
 
     def sample_images(self, ep=None, nb_image=4):
         """
         Generate and save sample images during training.
         Args:
-            config: Configuration settings.
             ep (str): Epoch identifier for filename.
             nb_image (int): Number of images to generate.
         Returns:

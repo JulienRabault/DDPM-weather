@@ -9,7 +9,7 @@ import torch
 from denoising_diffusion_pytorch import Unet, GaussianDiffusion
 from torch import distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import DataSet_Handler
@@ -69,7 +69,6 @@ def prepare_dataloader(config):
     """
     Prepare the data loader.
     Args:
-        dataset (Dataset): Dataset.
         config (Namespace): Configuration parameters.
 
     Returns:
@@ -208,13 +207,16 @@ def main_train(config):
     train_data = prepare_dataloader(config)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
-    trainer.train(config)
+    trainer.train()
     end = time.time()
     total_time = end - start
     if config.debug_log:
         print(f"\n#LOG: Training execution time: {total_time} seconds")
     if is_main_gpu():
-        trainer.sample_images("last", nb_image=config.n_sample)
+        config.model_path = f"{config.train_name}/best.pt"
+        model, _ = load_train_objs(config)
+        trainer = Trainer(model, config)
+        trainer.sample_images("last_best", nb_image=config.n_sample)
 
 
 def main_test(config):
