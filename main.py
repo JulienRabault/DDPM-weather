@@ -46,10 +46,9 @@ def load_train_objs(config):
     Args:
         config (Namespace): Configuration parameters.
     Returns:
-        tuple: Train set, model, optimizer.
+        tuple: model, optimizer.
     """
-    train_set = ISData_Loader(config.data_dir, config.batch_size,
-                              [DataSet_Handler.var_dict[var] for var in config.var_indexes], config.crop).loader()[1]
+
     umodel = Unet(
         dim=int(config.image_size / 2),
         dim_mults=(1, 2, 4, 8),
@@ -63,10 +62,10 @@ def load_train_objs(config):
         auto_normalize=config.auto_normalize
     )
     optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, betas=config.adam_betas)
-    return train_set, model, optimizer
+    return model, optimizer
 
 
-def prepare_dataloader(dataset: Dataset, config):
+def prepare_dataloader(config):
     """
     Prepare the data loader.
     Args:
@@ -76,13 +75,15 @@ def prepare_dataloader(dataset: Dataset, config):
     Returns:
         DataLoader: Data loader.
     """
+    train_set = ISData_Loader(config.data_dir, config.batch_size,
+                              [DataSet_Handler.var_dict[var] for var in config.var_indexes], config.crop).loader()[1]
     return DataLoader(
-        dataset,
+        train_set,
         batch_size=config.batch_size,
         pin_memory=True,
         shuffle=not dist.is_initialized(),
         num_workers=cpu_count(),
-        sampler=DistributedSampler(dataset, rank=get_rank(), shuffle=True,
+        sampler=DistributedSampler(train_set, rank=get_rank(), shuffle=True,
                                    drop_last=False) if dist.is_initialized() else None,
         drop_last=False
     )
@@ -120,10 +121,23 @@ def check_config(config):
     Returns:
         Namespace: Updated configuration.
     """
+    if config.invert_norm and config.mode == 'Test' and config.model_path is None:
+        raise ValueError("If --invert_norm is specified in Test mode, --model_path must be defined.")
+
+    if config.scheduler:
+        warnings.warn(f"scheduler_epoch is set to {config.scheduler_epoch} (default: 150). The scheduler is a OneCycleLR scheduler in PyTorch, and it is saved in the .pt file. You must provide the total number of training epochs when using a scheduler.")
+
+    if not torch.cuda.is_available():
+        warnings.warn(f"Sampling on CPU may be slow. It is recommended to use one or more GPUs for faster sampling.")
+
     # Check if resuming training and model path exists
-    if config.resume and (config.model_path is None or not os.path.isfile(config.model_path)):
-        raise FileNotFoundError(
-            f"config.resume={config.resume} but snapshot_path={config.model_path} is None or doesn't exist")
+    if config.resume:
+        if (config.model_path is None or not os.path.isfile(config.model_path)):
+            raise FileNotFoundError(
+                f"config.resume={config.resume} but snapshot_path={config.model_path} is None or doesn't exist")
+        if config.mode != 'Train':
+            raise ValueError("--r flag can only be used in Train mode.")
+
     # Print selected mode if running on local rank 0
     if get_rank() == 0:
         if config.mode == 'Train':
@@ -190,10 +204,10 @@ def main_train(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    dataset, model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(dataset, config)
+    model, optimizer = load_train_objs(config)
+    train_data = prepare_dataloader(config)
     start = time.time()
-    trainer = Trainer(model, dataset, train_data, optimizer, config)
+    trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train(config)
     end = time.time()
     total_time = end - start
@@ -209,9 +223,8 @@ def main_test(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    dataset, model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(dataset, config)
-    trainer = Trainer(model, dataset, train_data, optimizer, config.model_path)
+    model, _ = load_train_objs(config)
+    trainer = Trainer(model, config)
     trainer.sample_images(nb_image=config.n_sample)
 
 

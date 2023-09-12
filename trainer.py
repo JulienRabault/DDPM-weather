@@ -20,10 +20,9 @@ class Trainer:
     def __init__(
             self,
             model: torch.nn.Module,
-            train_dataset: DataSet_Handler.ISDataset,
-            train_data,
-            optimizer: torch.optim.Optimizer,
             config,
+            dataloader=None,
+            optimizer=None,
     ) -> None:
         """
         Initialize the Trainer.
@@ -37,18 +36,19 @@ class Trainer:
         self.config = config
         self.gpu_id = get_rank()
         self.model = model.to(self.gpu_id)
-        self.train_dataset = train_dataset
-        self.train_data = train_data
+        self.dataloader = dataloader
         self.optimizer = optimizer
         self.epochs_run = 0
         self.snapshot_path = self.config.model_path
-        self.stds = train_dataset.stds
-        self.means = train_dataset.means
+        if self.dataloader is not None:
+            self.train_dataset = self.dataloader.dataset
+            self.stds = self.train_dataset.stds
+            self.means = self.train_dataset.means
         self.best_loss = float('inf')
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
                                                                  epochs=self.config.scheduler_epoch,
-                                                                 steps_per_epoch=len(train_data),
+                                                                 steps_per_epoch=len(self.dataloader),
                                                                  anneal_strategy="cos",
                                                                  pct_start=0.1,
                                                                  div_factor=15.0,
@@ -113,17 +113,17 @@ class Trainer:
         Returns:
             float: Average loss for the epoch.
         """
-        b_sz = len(next(iter(self.train_data)))
-        iters = len(self.train_data)
+        b_sz = len(next(iter(self.dataloader)))
+        iters = len(self.dataloader)
         if dist.is_initialized():
-            self.train_data.sampler.set_epoch(epoch)
+            self.dataloader.sampler.set_epoch(epoch)
         total_loss = 0
         if is_main_gpu():
-            loop = tqdm(enumerate(self.train_data), total=iters,
-                             desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}", unit="batch",
-                             leave=False, postfix="")
+            loop = tqdm(enumerate(self.dataloader), total=iters,
+                        desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}", unit="batch",
+                        leave=False, postfix="")
         else:
-            loop = enumerate(self.train_data)
+            loop = enumerate(self.dataloader)
         for i, batch in loop:
             batch = batch.to(self.gpu_id)
             loss = self._run_batch(batch)
@@ -134,9 +134,9 @@ class Trainer:
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
         if self.config.debug_log:
             print(
-                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.train_data)} | Last loss: {total_loss / len(self.train_data)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
+                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
-        return total_loss / len(self.train_data)
+        return total_loss / len(self.dataloader)
 
     def _save_snapshot(self, epoch, path, loss):
         """
@@ -178,13 +178,15 @@ class Trainer:
 
         t = time.strftime("%d-%m-%y_%H-%M", time.localtime(time.time()))
         if self.config.resume:
-            wandb.init(project=self.config.wp, resume="auto",mode=os.environ['WANDB_MODE'], entity=config.entityWDB, name=f"{self.config.train_name}_{t}/",
+            wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'], entity=config.entityWDB,
+                       name=f"{self.config.train_name}_{t}/",
                        config={**vars(config), **{"optimizer": self.optimizer.__class__,
                                                   "scheduler": self.scheduler.__class__,
                                                   "lr_base": self.optimizer.param_groups[0]["lr"],
                                                   "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
         else:
-            wandb.init(project=self.config.wp, entity=config.entityWDB,mode=os.environ['WANDB_MODE'], name=f"{self.config.train_name}_{t}/",
+            wandb.init(project=self.config.wp, entity=config.entityWDB, mode=os.environ['WANDB_MODE'],
+                       name=f"{self.config.train_name}_{t}/",
                        config={**vars(config), **{"optimizer": self.optimizer.__class__,
                                                   "scheduler": self.scheduler.__class__,
                                                   "lr_base": self.optimizer.param_groups[0]["lr"],
@@ -201,14 +203,15 @@ class Trainer:
         if is_main_gpu():
             self._init_wandb(config)
             loop = tqdm(range(self.epochs_run, self.config.epochs + self.epochs_run),
-                             desc=f"Training...", unit="epoch", postfix="")
+                        desc=f"Training...", unit="epoch", postfix="")
         else:
             loop = range(self.epochs_run, self.config.epochs + self.epochs_run)
 
         for epoch in loop:
             avg_loss = self._run_epoch(epoch)
             if is_main_gpu():
-                loop.set_postfix_str(f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if config.scheduler else config.lr):.6f}")
+                loop.set_postfix_str(
+                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if config.scheduler else config.lr):.6f}")
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
@@ -239,12 +242,16 @@ class Trainer:
         if is_main_gpu():
             print(f"Sampling {nb_image * torch.cuda.device_count()} images...")
 
-        invTrans = transforms.Compose([
-            transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                 std=[1 / el for el in self.stds]),
-            transforms.Normalize(mean=[-el for el in self.means],
-                                 std=[1.] * len(self.config.var_indexes)),
-        ])
+        if self.config.invert_norm:
+            transforms_func = transforms.Compose([
+                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
+                                     std=[1 / el for el in self.stds]),
+                transforms.Normalize(mean=[-el for el in self.means],
+                                     std=[1.] * len(self.config.var_indexes)),
+            ])
+        else:
+            # identity
+            transforms_func = lambda x: x
 
         b = 0
         i = self.gpu_id
@@ -254,14 +261,10 @@ class Trainer:
                 sampled_images = self.model.module.sample(
                     batch_size=batch_size) if dist.is_initialized() else self.model.sample(batch_size=batch_size)
                 b += batch_size
-                if self.config.invert_norm:
-                    sampled_images_unnorm = invTrans(sampled_images)
-                else:
-                    sampled_images_unnorm = sampled_images
-                np_img = sampled_images_unnorm.cpu().numpy()
+                sampled_images = transforms_func(sampled_images)
+                np_img = sampled_images.cpu().numpy()
                 for img1 in np_img:
                     if ep is not None:
-                        m = os.path.join(f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy")
                         np.save(os.path.join(f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1)
                     else:
                         np.save(os.path.join(f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1)
@@ -287,7 +290,8 @@ class Trainer:
                         axes[i].axis('off')
                         fig.colorbar(im, ax=axes[i])
 
-            plt.savefig(os.path.join(f"{self.config.train_name}", "samples", f"all_images_grid_{ep}.jpg"), bbox_inches='tight')
+            plt.savefig(os.path.join(f"{self.config.train_name}", "samples", f"all_images_grid_{ep}.jpg"),
+                        bbox_inches='tight')
             plt.close()
 
         print(f"\nSampling done. Images saved in {self.config.train_name}/samples/")

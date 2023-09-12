@@ -1,7 +1,10 @@
+import torch
 from torch import distributed as dist
 
 
 def get_rank():
+    if not torch.cuda.is_available():
+        return 'cpu'
     if not dist.is_available():
         return 0
 
