@@ -36,6 +36,10 @@ class Trainer:
         self.dataloader = dataloader
         self.optimizer = optimizer
         self.epochs_run = 0
+
+        print("self.config", self.config)
+        print("self.config", self.config.model_path)
+
         self.snapshot_path = self.config.model_path
         if self.dataloader is not None:
             self.train_dataset = self.dataloader.dataset
@@ -45,7 +49,8 @@ class Trainer:
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
                                                                  epochs=self.config.scheduler_epoch,
-                                                                 steps_per_epoch=len(self.dataloader),
+                                                                 steps_per_epoch=len(
+                                                                     self.dataloader),
                                                                  anneal_strategy="cos",
                                                                  pct_start=0.1,
                                                                  div_factor=15.0,
@@ -83,9 +88,11 @@ class Trainer:
         self.stds = snapshot["STDS"]
         self.means = snapshot["MEANS"]
         if self.config.debug_log:
-            print(f"\n#LOG : [GPU{self.gpu_id}] Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
+            print(
+                f"\n#LOG : [GPU{self.gpu_id}] Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
         elif is_main_gpu():
-            print(f"#INFO : Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
+            print(
+                f"#INFO : Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
         self.epochs_run += 1
 
     def _run_batch(self, batch):
@@ -159,7 +166,8 @@ class Trainer:
         if self.config.use_wandb:
             snapshot["WANDB_ID"] = wandb.run.id
         torch.save(snapshot, path)
-        print(f"#INFO : Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
+        print(
+            f"#INFO : Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
 
     def _init_wandb(self):
         """
@@ -175,16 +183,16 @@ class Trainer:
             wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'], entity=self.config.entityWDB,
                        name=f"{self.config.train_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
-                                                  "scheduler": self.scheduler.__class__,
-                                                  "lr_base": self.optimizer.param_groups[0]["lr"],
-                                                  "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
+                                                       "scheduler": self.scheduler.__class__,
+                                                       "lr_base": self.optimizer.param_groups[0]["lr"],
+                                                       "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
         else:
             wandb.init(project=self.config.wp, entity=self.config.entityWDB, mode=os.environ['WANDB_MODE'],
                        name=f"{self.config.train_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
-                                                  "scheduler": self.scheduler.__class__,
-                                                  "lr_base": self.optimizer.param_groups[0]["lr"],
-                                                  "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
+                                                       "scheduler": self.scheduler.__class__,
+                                                       "lr_base": self.optimizer.param_groups[0]["lr"],
+                                                       "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
 
     def train(self):
         """
@@ -207,20 +215,25 @@ class Trainer:
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
-                    self._save_snapshot(epoch, os.path.join(f"{self.config.train_name}", "best.pt"), avg_loss)
+                    self._save_snapshot(epoch, os.path.join(
+                        f"{self.config.train_name}", "best.pt"), avg_loss)
 
                 if epoch % self.config.any_time == 0.0:
-                    self.sample_images(ep=str(epoch), nb_image=self.config.n_sample)
-                    self._save_snapshot(epoch, os.path.join(f"{self.config.train_name}", f"save_{epoch}.pt"), avg_loss)
+                    self.sample_images(
+                        ep=str(epoch), nb_image=self.config.n_sample)
+                    self._save_snapshot(epoch, os.path.join(
+                        f"{self.config.train_name}", f"save_{epoch}.pt"), avg_loss)
 
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
                 self._log(epoch, log)
-                self._save_snapshot(epoch, os.path.join(f"{self.config.train_name}", "last.pt"), avg_loss)
+                self._save_snapshot(epoch, os.path.join(
+                    f"{self.config.train_name}", "last.pt"), avg_loss)
 
         if is_main_gpu():
             wandb.finish()
-            print(f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.train_name}', 'best.pt')}")
+            print(
+                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.train_name}', 'best.pt')}")
 
     def sample_images(self, ep=None, nb_image=4):
         """
@@ -243,7 +256,7 @@ class Trainer:
             ])
         else:
             # identity
-            transforms_func = lambda x: x
+            def transforms_func(x): return x
 
         b = 0
         i = self.gpu_id
@@ -257,9 +270,11 @@ class Trainer:
                 np_img = sampled_images.cpu().numpy()
                 for img1 in np_img:
                     if ep is not None:
-                        np.save(os.path.join(f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1)
+                        np.save(os.path.join(
+                            f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1)
                     else:
-                        np.save(os.path.join(f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1)
+                        np.save(os.path.join(
+                            f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1)
                     if torch.cuda.device_count() > 1 and self.config.mode == "Test":
                         i += torch.cuda.device_count()
                     else:
@@ -268,13 +283,15 @@ class Trainer:
 
         # Plotting images for evolution
         if is_main_gpu() and self.config.mode == 'Train':
-            fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(self.config.var_indexes), figsize=(10, 10))
+            fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(
+                self.config.var_indexes), figsize=(10, 10))
             for i in range(min(6, nb_image)):
                 for j in range(len(self.config.var_indexes)):
                     cmap = 'viridis' if self.config.var_indexes[j] != 't2m' else 'bwr'
                     image = np_img[i, j]
                     if len(self.config.var_indexes) > 1:
-                        im = axes[i, j].imshow(image, cmap=cmap, origin='lower')
+                        im = axes[i, j].imshow(
+                            image, cmap=cmap, origin='lower')
                         axes[i, j].axis('off')
                         fig.colorbar(im, ax=axes[i, j])
                     else:
@@ -286,7 +303,8 @@ class Trainer:
                         bbox_inches='tight')
             plt.close()
 
-        print(f"\nSampling done. Images saved in {self.config.train_name}/samples/")
+        print(
+            f"\nSampling done. Images saved in {self.config.train_name}/samples/")
 
     def _log(self, epoch, log_dict):
         """
@@ -298,7 +316,8 @@ class Trainer:
             None
         """
         wandb.log(log_dict, step=epoch)
-        csv_filename = os.path.join(f"{self.config.train_name}", "logs_train.csv")
+        csv_filename = os.path.join(
+            f"{self.config.train_name}", "logs_train.csv")
         file_exists = Path(csv_filename).is_file()
         with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
             fieldnames = ['epoch'] + list(log_dict.keys())

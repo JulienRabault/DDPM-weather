@@ -17,7 +17,8 @@ from DataSet_Handler import ISData_Loader
 from distributed import get_rank, is_main_gpu
 from trainer import Trainer
 
-warnings.filterwarnings("ignore", message="This DataLoader will create .* worker processes in total.*")
+warnings.filterwarnings(
+    "ignore", message="This DataLoader will create .* worker processes in total.*")
 gc.collect()
 torch.cuda.empty_cache()
 
@@ -61,7 +62,8 @@ def load_train_objs(config):
         beta_schedule=config.beta_schedule,
         auto_normalize=config.auto_normalize
     )
-    optimizer = torch.optim.Adam(model.parameters(), lr=config.lr, betas=config.adam_betas)
+    optimizer = torch.optim.Adam(
+        model.parameters(), lr=config.lr, betas=config.adam_betas)
     return model, optimizer
 
 
@@ -121,13 +123,16 @@ def check_config(config):
         Namespace: Updated configuration.
     """
     if config.invert_norm and config.mode == 'Test' and config.model_path is None:
-        raise ValueError("If --invert_norm is specified in Test mode, --model_path must be defined.")
+        raise ValueError(
+            "If --invert_norm is specified in Test mode, --model_path must be defined.")
 
     if config.scheduler:
-        warnings.warn(f"scheduler_epoch is set to {config.scheduler_epoch} (default: 150). The scheduler is a OneCycleLR scheduler in PyTorch, and it is saved in the .pt file. You must provide the total number of training epochs when using a scheduler.")
+        warnings.warn(
+            f"scheduler_epoch is set to {config.scheduler_epoch} (default: 150). The scheduler is a OneCycleLR scheduler in PyTorch, and it is saved in the .pt file. You must provide the total number of training epochs when using a scheduler.")
 
     if not torch.cuda.is_available():
-        warnings.warn(f"Sampling on CPU may be slow. It is recommended to use one or more GPUs for faster sampling.")
+        warnings.warn(
+            f"Sampling on CPU may be slow. It is recommended to use one or more GPUs for faster sampling.")
 
     # Check if resuming training and model path exists
     if config.resume:
@@ -157,13 +162,15 @@ def check_config(config):
         if config.resume:
             for path in paths:
                 if not os.path.exists(path):
-                    raise FileNotFoundError(f"The following directories do not exist: {path}")
+                    raise FileNotFoundError(
+                        f"The following directories do not exist: {path}")
         else:
             train_num = 1
             train_name = config.train_name
             while os.path.exists(train_name):
                 if f"_{train_num}" in train_name:
-                    train_name = "_".join(train_name.split('_')[:-1]) + f"_{train_num + 1}"
+                    train_name = "_".join(train_name.split(
+                        '_')[:-1]) + f"_{train_num + 1}"
                     train_num += 1
                 else:
                     train_name = f"{train_name}_{train_num}"
@@ -183,12 +190,14 @@ def check_config(config):
         n_sample = config.n_sample
 
         if n_sample % world_size != 0:
-            raise ValueError(f"n_sample={n_sample} is not divisible by world_size gpus={torch.cuda.device_count()}")
+            raise ValueError(
+                f"n_sample={n_sample} is not divisible by world_size gpus={torch.cuda.device_count()}")
 
         config.n_sample = n_sample // world_size
 
     # Determine variable indexes
-    config.var_indexes = ['t2m'] if config.v_i == 1 else ['u', 'v'] if config.v_i == 2 else ['u', 'v', 't2m']
+    config.var_indexes = ['t2m'] if config.v_i == 1 else [
+        'u', 'v'] if config.v_i == 2 else ['u', 'v', 't2m']
 
     # Save configuration and print if running on local rank 0
     if get_rank() == 0:
@@ -206,7 +215,8 @@ def main_train(config):
     model, optimizer = load_train_objs(config)
     train_data = prepare_dataloader(config)
     start = time.time()
-    trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
+    trainer = Trainer(model, config, dataloader=train_data,
+                      optimizer=optimizer)
     trainer.train()
     end = time.time()
     total_time = end - start
@@ -232,42 +242,61 @@ def main_test(config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=['Train', 'Test'], help='Execution mode: Choose between Train or Test')
-    parser.add_argument('--train_name', type=str, default='train', help='Name for the training run')
-    parser.add_argument('--batch_size', type=int, default=16, help='Batch size')
-    parser.add_argument('--n_sample', type=int, default=4, help='Number of samples to generate')
-    parser.add_argument('--any_time', type=int, default=400, help='Every how many epochs to save and sample')
+    parser.add_argument('mode', choices=[
+                        'Train', 'Test'], help='Execution mode: Choose between Train or Test')
+    parser.add_argument('--train_name', type=str,
+                        default='train', help='Name for the training run')
+    parser.add_argument('--batch_size', type=int,
+                        default=16, help='Batch size')
+    parser.add_argument('--n_sample', type=int, default=4,
+                        help='Number of samples to generate')
+    parser.add_argument('--any_time', type=int, default=400,
+                        help='Every how many epochs to save and sample')
     parser.add_argument('--model_path', type=str, default=None,
                         help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
     parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate')
-    parser.add_argument('--adam_betas', type=tuple, default=(0.9, 0.99), help='Betas for the Adam optimizer')
-    parser.add_argument('--epochs', type=int, default=150, help='Number of epochs to train for')
-    parser.add_argument('--image_size', type=int, default=128, help='Size of the image')
-    parser.add_argument('--data_dir', type=str, default='data/', help='Directory containing the data')
-    parser.add_argument('--v_i', type=int, default=3, help='Number of variable indices')
-    parser.add_argument('--var_indexes', type=list, default=['u', 'v', 't2m'], help='List of variable indices')
-    parser.add_argument('--crop', type=list, default=[78, 206, 55, 183], help='Crop parameters for images')
-    parser.add_argument("--wandbproject", dest="wp", type=str, default="meteoDDPM", help="Wandb project name")
+    parser.add_argument('--adam_betas', type=tuple,
+                        default=(0.9, 0.99), help='Betas for the Adam optimizer')
+    parser.add_argument('--epochs', type=int, default=150,
+                        help='Number of epochs to train for')
+    parser.add_argument('--image_size', type=int,
+                        default=128, help='Size of the image')
+    parser.add_argument('--data_dir', type=str, default='data/',
+                        help='Directory containing the data')
+    parser.add_argument('--v_i', type=int, default=3,
+                        help='Number of variable indices')
+    parser.add_argument('--var_indexes', type=list,
+                        default=['u', 'v', 't2m'], help='List of variable indices')
+    parser.add_argument(
+        '--crop', type=list, default=[78, 206, 55, 183], help='Crop parameters for images')
+    parser.add_argument("--wandbproject", dest="wp", type=str,
+                        default="meteoDDPM", help="Wandb project name")
     parser.add_argument("-w", "--wandb", dest="use_wandb", default=False, action="store_true",
                         help="Use wandb for logging")
-    parser.add_argument("--entityWDB", type=str, default="jrabault", help="Wandb entity name")
+    parser.add_argument("--entityWDB", type=str,
+                        default="jrabault", help="Wandb entity name")
     parser.add_argument("--invert_norm", dest="invert_norm", default=False, action="store_true",
                         help="Invert normalization of images samples")
-    parser.add_argument("--beta_schedule", type=str, default="cosine", help="Beta schedule type (cosine or linear)")
+    parser.add_argument("--beta_schedule", type=str, default="cosine",
+                        help="Beta schedule type (cosine or linear)")
     parser.add_argument("--auto_normalize", dest="auto_normalize", default=False, action="store_true",
                         help="Automatically normalize")
     parser.add_argument("--scheduler", dest="scheduler", default=False, action="store_true",
                         help="Use scheduler for learning rate")
-    parser.add_argument('--scheduler_epoch', type=int, default=150, help='Number of epochs for scheduler to down scale (save for resume')
+    parser.add_argument('--scheduler_epoch', type=int, default=150,
+                        help='Number of epochs for scheduler to down scale (save for resume')
     parser.add_argument("-r", "--resume", dest="resume", default=False, action="store_true",
                         help="Resume from checkpoint")
-    parser.add_argument("--debug", dest="debug_log", default=False, action="store_true", help="Enable debug logs")
+    parser.add_argument("--debug", dest="debug_log", default=False,
+                        action="store_true", help="Enable debug logs")
     config = parser.parse_args()
 
     try:
         local_rank = int(os.environ["LOCAL_RANK"])
     except KeyError:
         local_rank = 0
+
+    # assert config.n_sample <= config.batch_size, 'can only work with n_sample <=  batch_size'
 
     ddp_setup(config)
 
