@@ -235,8 +235,11 @@ def main_test(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    model, _ = load_train_objs(config)
-    trainer = Trainer(model, config)
+    model, optimizer = load_train_objs(config)
+    train_data = prepare_dataloader(config)
+    start = time.time()
+    trainer = Trainer(model, config, dataloader=train_data,
+                      optimizer=optimizer)
     if config.recons is not None:
         trainer.reconstruct_images(
             nb_batch=config.n_sample // config.batch_size, t_noise=config.recons)

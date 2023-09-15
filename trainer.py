@@ -267,7 +267,8 @@ class Trainer:
 
         for i in tqdm(range(nb_batch)):
 
-            batch = next(iter(self.train_data))
+            batch = next(iter(self.dataloader))
+            print("batch", batch.shape)
             batchs.append(batch)
             image_batch = invTrans(batch)
             for img1 in image_batch:
