@@ -15,6 +15,13 @@ from tqdm import tqdm
 from distributed import get_rank, is_main_gpu
 
 
+def save_gray_image(grid, outfile, colormap):
+    plt.imshow(grid, cmap=colormap)
+    plt.colorbar()
+    plt.savefig(outfile)
+    plt.close()
+
+
 class Trainer:
     def __init__(
             self,
@@ -36,9 +43,6 @@ class Trainer:
         self.dataloader = dataloader
         self.optimizer = optimizer
         self.epochs_run = 0
-
-        print("self.config", self.config)
-        print("self.config", self.config.model_path)
 
         self.snapshot_path = self.config.model_path
         if self.dataloader is not None:
@@ -104,6 +108,8 @@ class Trainer:
             float: Loss value for the batch.
         """
         self.optimizer.zero_grad()
+        print("batch", batch.shape)
+
         loss = self.model(batch)
         loss.backward()
         self.optimizer.step()
@@ -235,6 +241,72 @@ class Trainer:
             print(
                 f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.train_name}', 'best.pt')}")
 
+    def reconstruct_images(self, nb_batch=1, t_noise=999):
+        """
+        Generate and save sample images of the dataset.
+        Args:
+            config: Configuration settings.
+            ep (str): Epoch identifier for filename.
+            nb_image (int): Number of images to generate.
+        Returns:
+            None
+        """
+        # transformation to get original data values
+        invTrans = transforms.Compose([
+            transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
+                                 std=[1 / el for el in self.stds]),
+            transforms.Normalize(mean=[-el for el in self.means],
+                                 std=[1.] * len(self.config.var_indexes)),
+        ])
+
+        # =========================
+        # plot batch dataset images
+        # =========================
+
+        batchs = []
+
+        for i in tqdm(range(nb_batch)):
+
+            batch = next(iter(self.train_data))
+            batchs.append(batch)
+            image_batch = invTrans(batch)
+            for img1 in image_batch:
+                self.plot_img(img1, i, "batch")
+
+        # ==============================================
+        # plot recons images from previous dataset batch
+        # ==============================================
+
+        for i, batch in tqdm(enumerate(batchs)):
+
+            # get a t such as  0 < t   and t < num_timesteps=1000
+            t = torch.ones((batch.shape[0],),
+                           device=self.gpu_id).long() * t_noise
+
+            # normalize batch
+            x_start = self.model.normalize(batch).to(self.gpu_id)
+
+            # get a random noise
+            noise = torch.randn_like(x_start).to(self.gpu_id)
+
+            # Forward Diffusion : add noise to x_start
+            img = self.model.q_sample(x_start=x_start, t=t, noise=noise)
+
+            # Reverse Diffusion : add noise to x_start
+            for t in tqdm(reversed(range(0, t.item())), desc='sampling loop time step', total=t.item()):
+                img, _ = self.model.p_sample(img, t, None)
+
+            # unnormalize img
+            sampled_images = self.model.unnormalize(img)
+
+            # back to original values
+            sampled_images_unnorm = invTrans(sampled_images)
+            np_img = sampled_images_unnorm.cpu()
+
+            # plot reconsruction images
+            for img1 in np_img:
+                self.plot_img(img1, i, "recon")
+
     def sample_images(self, ep=None, nb_image=4):
         """
         Generate and save sample images during training.
@@ -257,24 +329,42 @@ class Trainer:
         else:
             # identity
             def transforms_func(x): return x
-
         b = 0
         i = self.gpu_id
+
         with tqdm(total=nb_image // self.config.batch_size, desc="Sampling ", unit="batch") as pbar:
             while b < nb_image:
                 batch_size = min(nb_image - b, self.config.batch_size)
+
                 sampled_images = self.model.module.sample(
                     batch_size=batch_size) if dist.is_initialized() else self.model.sample(batch_size=batch_size)
+                print("sampled_images", sampled_images.shape)
+
                 b += batch_size
                 sampled_images = transforms_func(sampled_images)
                 np_img = sampled_images.cpu().numpy()
                 for img1 in np_img:
                     if ep is not None:
                         np.save(os.path.join(
-                            f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1)
+                            f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1.numpy())
                     else:
+
                         np.save(os.path.join(
-                            f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1)
+                            f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1.numpy())
+                        if self.config.plot_image:
+
+                            self.plot_img(img1, i, "sample")
+                            # img1 = torch.transpose(img1, 0, 2)
+                            # img1 = torch.fliplr(img1)
+                            # img1 = torch.transpose(img1, 0, 2)
+
+                            # save_gray_image(img1[0, :, :].numpy(), os.path.join(
+                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_u.png"), 'viridis')
+                            # save_gray_image(img1[1, :, :].numpy(), os.path.join(
+                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_v.png"), 'viridis')
+                            # save_gray_image(img1[2, :, :].numpy(), os.path.join(
+                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_t.png"), 'RdBu_r')
+
                     if torch.cuda.device_count() > 1 and self.config.mode == "Test":
                         i += torch.cuda.device_count()
                     else:
@@ -305,6 +395,17 @@ class Trainer:
 
         print(
             f"\nSampling done. Images saved in {self.config.train_name}/samples/")
+
+    def plot_img(self, img1, i, name):
+        img1 = torch.transpose(img1, 0, 2)
+        img1 = torch.fliplr(img1)
+        img1 = torch.transpose(img1, 0, 2)
+        save_gray_image(img1[0, :, :].numpy(), os.path.join(
+            f"{self.config.train_name}", "samples", f"_{name}_{i}_u.png"), 'viridis')
+        save_gray_image(img1[1, :, :].numpy(), os.path.join(
+            f"{self.config.train_name}", "samples", f"_{name}_{i}_v.png"), 'viridis')
+        save_gray_image(img1[2, :, :].numpy(), os.path.join(
+            f"{self.config.train_name}", "samples", f"_{name}_{i}_t.png"), 'RdBu_r')
 
     def _log(self, epoch, log_dict):
         """

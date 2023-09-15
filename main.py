@@ -237,7 +237,11 @@ def main_test(config):
     """
     model, _ = load_train_objs(config)
     trainer = Trainer(model, config)
-    trainer.sample_images(nb_image=config.n_sample)
+    if config.recons is not None:
+        trainer.reconstruct_images(
+            nb_batch=config.n_sample // config.batch_size, t_noise=config.recons)
+    else:
+        trainer.sample_images(nb_image=config.n_sample)
 
 
 if __name__ == "__main__":
@@ -289,6 +293,11 @@ if __name__ == "__main__":
                         help="Resume from checkpoint")
     parser.add_argument("--debug", dest="debug_log", default=False,
                         action="store_true", help="Enable debug logs")
+    parser.add_argument("--plot_image", dest="plot_image", default=False,
+                        action="store_true", help="plot images")
+    parser.add_argument("--recons", dest="recons", default=None, type=int,
+                        help="reconstruct images")
+
     config = parser.parse_args()
 
     try:
