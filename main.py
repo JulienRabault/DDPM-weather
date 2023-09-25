@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import DataSet_Handler
-from DataSet_Handler import ISData_Loader
+from Sampler import Sampler
 from distributed import get_rank, is_main_gpu
 from trainer import Trainer
 
@@ -29,11 +29,10 @@ def ddp_setup(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    if torch.cuda.device_count() < 2 or config.mode == 'Test':
+    if torch.cuda.device_count() < 2:
         return
     init_process_group(
         'nccl' if dist.is_nccl_available() else 'gloo',
-        rank=local_rank,
         world_size=torch.cuda.device_count())
     if config.debug_log:
         print(
@@ -67,7 +66,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config):
+def prepare_dataloader(config, path):
     """
     Prepare the data loader.
     Args:
@@ -76,8 +75,8 @@ def prepare_dataloader(config):
     Returns:
         DataLoader: Data loader.
     """
-    train_set = ISData_Loader(config.data_dir, config.batch_size,
-                              [DataSet_Handler.var_dict[var] for var in config.var_indexes], config.crop).loader()[1]
+    train_set = DataSet_Handler.ISDataset(config, path)
+
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
@@ -122,9 +121,10 @@ def check_config(config):
     Returns:
         Namespace: Updated configuration.
     """
-    if config.invert_norm and config.mode == 'Test' and config.model_path is None:
+
+    if config.invert_norm and config.mode != 'Train' and config.model_path is None:
         raise ValueError(
-            "If --invert_norm is specified in Test mode, --model_path must be defined.")
+            "If --invert_norm is specified in Sample mode, --model_path must be defined.")
 
     if config.scheduler:
         warnings.warn(
@@ -135,57 +135,10 @@ def check_config(config):
             f"Sampling on CPU may be slow. It is recommended to use one or more GPUs for faster sampling.")
 
     # Check if resuming training and model path exists
-    if config.resume:
-        if (config.model_path is None or not os.path.isfile(config.model_path)):
-            raise FileNotFoundError(
-                f"config.resume={config.resume} but snapshot_path={config.model_path} is None or doesn't exist")
-        if config.mode != 'Train':
-            raise ValueError("--r flag can only be used in Train mode.")
-
-    # Print selected mode if running on local rank 0
-    if get_rank() == 0:
-        if config.mode == 'Train':
-            print('#INFO: Mode Train selected')
-        elif config.mode == 'Test':
-            print('#INFO: Mode Test selected')
-
-    # Define paths
-    paths = [
-        f"{config.train_name}/",
-        f"{config.train_name}/samples/",
-        f"{config.train_name}/WANDB/",
-        f"{config.train_name}/WANDB/cache",
-    ]
-
-    # Check paths if resuming, else create them
-    if get_rank() == 0:
-        if config.resume:
-            for path in paths:
-                if not os.path.exists(path):
-                    raise FileNotFoundError(
-                        f"The following directories do not exist: {path}")
-        else:
-            train_num = 1
-            train_name = config.train_name
-            while os.path.exists(train_name):
-                if f"_{train_num}" in train_name:
-                    train_name = "_".join(train_name.split(
-                        '_')[:-1]) + f"_{train_num + 1}"
-                    train_num += 1
-                else:
-                    train_name = f"{train_name}_{train_num}"
-            config.train_name = train_name
-            paths = [
-                f"{config.train_name}/",
-                f"{config.train_name}/samples/",
-                f"{config.train_name}/WANDB/",
-                f"{config.train_name}/WANDB/cache",
-            ]
-            for path in paths:
-                os.makedirs(path, exist_ok=True)
+    check_path(config)
 
     # Adjust sample count if using multiple GPUs
-    if torch.cuda.device_count() > 1 and config.mode == 'Test':
+    if torch.cuda.device_count() > 1 and config.mode != 'Train':
         world_size = torch.cuda.device_count()
         n_sample = config.n_sample
 
@@ -206,6 +159,56 @@ def check_config(config):
     return config
 
 
+def check_path(config):
+    if config.resume:
+        if (config.model_path is None or not os.path.isfile(config.model_path)):
+            raise FileNotFoundError(
+                f"config.resume={config.resume} but snapshot_path={config.model_path} is None or doesn't exist")
+        if config.mode != 'Train':
+            raise ValueError("--r flag can only be used in Train mode.")
+    # Print selected mode if running on local rank 0
+    if get_rank() == 0:
+        if config.mode == 'Train':
+            print('#INFO: Mode Train selected')
+        elif config.mode != 'Train':
+            print('#INFO: Mode Sample selected')
+    paths = [
+        f"{config.train_name}/",
+        f"{config.train_name}/samples/",
+    ]
+    if config.mode == 'Train':
+        paths.append(f"{config.train_name}/WANDB/")
+        paths.append(f"{config.train_name}/WANDB/cache")
+    # Check paths if resuming, else create them
+    if is_main_gpu():
+        if config.resume:
+            for path in paths:
+                if not os.path.exists(path):
+                    raise FileNotFoundError(
+                        f"The following directories do not exist: {path}")
+        else:
+            train_num = 1
+            train_name = config.train_name
+            while os.path.exists(train_name):
+                if f"_{train_num}" in train_name:
+                    train_name = "_".join(train_name.split(
+                        '_')[:-1]) + f"_{train_num + 1}"
+                    train_num += 1
+                else:
+                    train_name = f"{train_name}_{train_num}"
+            config.train_name = train_name
+            paths = [
+                f"{config.train_name}/",
+                f"{config.train_name}/samples/",
+            ]
+            if config.mode == 'Train':
+                paths.append(f"{config.train_name}/WANDB/")
+                paths.append(f"{config.train_name}/WANDB/cache")
+            for path in paths:
+                print(f"Creating directory {path}")
+                os.makedirs(path, exist_ok=True)
+
+
 def main_train(config):
     """
     Main function for training.
@@ -213,7 +216,7 @@ def main_train(config):
         config (Namespace): Configuration parameters.
     """
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config)
+    train_data = prepare_dataloader(config, path=config.data_dir)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data,
                       optimizer=optimizer)
@@ -223,94 +226,95 @@ def main_train(config):
     if config.debug_log:
         print(f"\n#LOG: Training execution time: {total_time} seconds")
     if is_main_gpu():
+        # Sample best model
         config.model_path = f"{config.train_name}/best.pt"
         model, _ = load_train_objs(config)
-        trainer = Trainer(model, config)
-        trainer.sample_images("last_best", nb_image=config.n_sample)
+        sampler = Sampler(model, config)
+        sampler.sample(filename_format="sample_best_{i}.npy", nb_img=config.n_sample)
 
 
-def main_test(config):
+def main_sample(config):
     """
     Main function for testing.
     Args:
         config (Namespace): Configuration parameters.
     """
-    model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config)
-    start = time.time()
-    trainer = Trainer(model, config, dataloader=train_data,
-                      optimizer=optimizer)
-    if config.recons is not None:
-        trainer.reconstruct_images(
-            nb_batch=config.n_sample // config.batch_size, t_noise=config.recons)
+
+    model, _ = load_train_objs(config)
+    sampler = Sampler(model, config)
+    if config.guided is None:
+        sampler.sample(nb_img=config.n_sample)
     else:
-        trainer.sample_images(nb_image=config.n_sample)
+        train_data = prepare_dataloader(config, path=config.guided)
+        sampler.guided_sample(train_data)
+
+
+def get_parser():
+    parser = argparse.ArgumentParser(description='Deep Learning Training and Testing Script')
+
+    # General parameters
+    general_args = parser.add_argument_group('General Parameters')
+    general_args.add_argument(dest='mode', choices=['Train', 'Sample'],
+                              help='Execution mode: Choose between Train or Sample')
+    general_args.add_argument('-t', '--train_name', type=str, default='train', help='Name for the training run')
+    general_args.add_argument('-bs', '--batch_size', type=int, default=128, help='Batch size')
+    general_args.add_argument('-s', '--n_sample', type=int, default=200, help='Number of samples to generate')
+    general_args.add_argument('-a', '--any_time', type=int, default=400,
+                              help='Every how many epochs to save and sample')
+    general_args.add_argument('-mp', '--model_path', type=str, default=None,
+                              help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
+    general_args.add_argument("--debug", dest="debug_log", default=False, action="store_true",
+                              help="Enable debug logs")
+    general_args.add_argument("-g", "--guide_data", dest="guided", type=str, default=None, help="Path to guided data")
+
+    # Data parameters
+    data_args = parser.add_argument_group('Data Parameters')
+    data_args.add_argument('-dd', '--data_dir', type=str, default=None, help='Directory containing the data')
+    data_args.add_argument('-nvi', '--v_i', type=int, default=3, help='Number of variable indices')
+    data_args.add_argument('-vi', '--var_indexes', type=list, default=['u', 'v', 't2m'],
+                           help='List of variable indices')
+    data_args.add_argument('-c', '--crop', type=list, default=[78, 206, 55, 183], help='Crop parameters for images')
+    data_args.add_argument("--auto_normalize", dest="auto_normalize", default=False, action="store_true",
+                           help="Automatically normalize")
+    data_args.add_argument("--invert_norm", dest="invert_norm", default=False, action="store_true",
+                           help="Invert normalization of image samples")
+    data_args.add_argument('-is', '--image_size', type=int, default=128, help='Size of the image')
+    data_args.add_argument('-mf', '--mean_file', type=str, default='mean_with_orog.npy', help='Mean file path')
+    data_args.add_argument('-xf', '--max_file', type=str, default='max_with_orog.npy', help='Max file path')
+
+    # Model parameters
+    training_args = parser.add_argument_group('Train Parameters')
+    training_args.add_argument("--scheduler", dest="scheduler", default=False, action="store_true",
+                               help="Use scheduler for learning rate")
+    training_args.add_argument('-se', '--scheduler_epoch', type=int, default=150,
+                               help='Number of epochs for scheduler to downscale (save for resume)')
+    training_args.add_argument("-r", "--resume", dest="resume", default=False, action="store_true",
+                               help="Resume from checkpoint")
+    training_args.add_argument('-lr', '--lr', type=float, default=5e-4, help='Learning rate')
+    training_args.add_argument('-ab', '--adam_betas', type=tuple, default=(0.9, 0.99),
+                               help='Betas for the Adam optimizer')
+    training_args.add_argument('-e', '--epochs', type=int, default=150, help='Number of epochs to train for')
+    training_args.add_argument("--beta_schedule", type=str, default="cosine",
+                               help="Beta schedule type (cosine or linear)")
+
+    # Tracking parameters
+    tracking_args = parser.add_argument_group('Tracking Parameters')
+    tracking_args.add_argument("--wandbproject", dest="wp", type=str, default="meteoDDPM", help="Wandb project name")
+    tracking_args.add_argument("-w", "--wandb", dest="use_wandb", default=False, action="store_true",
+                               help="Use wandb for logging")
+    tracking_args.add_argument("--entityWDB", type=str, default="jrabault", help="Wandb entity name")
+    return parser
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument('mode', choices=[
-                        'Train', 'Test'], help='Execution mode: Choose between Train or Test')
-    parser.add_argument('--train_name', type=str,
-                        default='train', help='Name for the training run')
-    parser.add_argument('--batch_size', type=int,
-                        default=16, help='Batch size')
-    parser.add_argument('--n_sample', type=int, default=4,
-                        help='Number of samples to generate')
-    parser.add_argument('--any_time', type=int, default=400,
-                        help='Every how many epochs to save and sample')
-    parser.add_argument('--model_path', type=str, default=None,
-                        help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
-    parser.add_argument('--lr', type=float, default=5e-4, help='Learning rate')
-    parser.add_argument('--adam_betas', type=tuple,
-                        default=(0.9, 0.99), help='Betas for the Adam optimizer')
-    parser.add_argument('--epochs', type=int, default=150,
-                        help='Number of epochs to train for')
-    parser.add_argument('--image_size', type=int,
-                        default=128, help='Size of the image')
-    parser.add_argument('--data_dir', type=str, default='data/',
-                        help='Directory containing the data')
-    parser.add_argument('--v_i', type=int, default=3,
-                        help='Number of variable indices')
-    parser.add_argument('--var_indexes', type=list,
-                        default=['u', 'v', 't2m'], help='List of variable indices')
-    parser.add_argument(
-        '--crop', type=list, default=[78, 206, 55, 183], help='Crop parameters for images')
-    parser.add_argument("--wandbproject", dest="wp", type=str,
-                        default="meteoDDPM", help="Wandb project name")
-    parser.add_argument("-w", "--wandb", dest="use_wandb", default=False, action="store_true",
-                        help="Use wandb for logging")
-    parser.add_argument("--entityWDB", type=str,
-                        default="jrabault", help="Wandb entity name")
-    parser.add_argument("--invert_norm", dest="invert_norm", default=False, action="store_true",
-                        help="Invert normalization of images samples")
-    parser.add_argument("--beta_schedule", type=str, default="cosine",
-                        help="Beta schedule type (cosine or linear)")
-    parser.add_argument("--auto_normalize", dest="auto_normalize", default=False, action="store_true",
-                        help="Automatically normalize")
-    parser.add_argument("--scheduler", dest="scheduler", default=False, action="store_true",
-                        help="Use scheduler for learning rate")
-    parser.add_argument('--scheduler_epoch', type=int, default=150,
-                        help='Number of epochs for scheduler to down scale (save for resume')
-    parser.add_argument("-r", "--resume", dest="resume", default=False, action="store_true",
-                        help="Resume from checkpoint")
-    parser.add_argument("--debug", dest="debug_log", default=False,
-                        action="store_true", help="Enable debug logs")
-    parser.add_argument("--plot_image", dest="plot_image", default=False,
-                        action="store_true", help="plot images")
-    parser.add_argument("--recons", dest="recons", default=None, type=int,
-                        help="reconstruct images")
 
-    config = parser.parse_args()
-
-    try:
-        local_rank = int(os.environ["LOCAL_RANK"])
-    except KeyError:
-        local_rank = 0
+    config = get_parser().parse_args()
 
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <=  batch_size'
 
     ddp_setup(config)
+    local_rank = get_rank()
+    print("local_rank : ", local_rank)
 
     config = check_config(config)
 
@@ -326,8 +330,8 @@ if __name__ == "__main__":
 
     if config.mode == 'Train':
         main_train(config)
-    elif config.mode == 'Test':
-        main_test(config)
+    elif config.mode != 'Train':
+        main_sample(config)
 
     if dist.is_initialized():
         destroy_process_group()

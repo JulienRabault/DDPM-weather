@@ -1,18 +1,28 @@
 import csv
 import os.path
 import time
+import warnings
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.distributed as dist
-import torch.nn as nn
 import wandb
+from torch import distributed as dist, nn as nn
 from torchvision import transforms
 from tqdm import tqdm
 
-from distributed import get_rank, is_main_gpu
+from Ddpm_base import Ddpm_base
+from distributed import is_main_gpu
+
+
+def image_basic_loss(images, target_image):
+    """
+    Given a target image, return a loss for how far away on average
+    the images' pixels are from that image.
+    """
+    error = torch.abs(images - target_image).mean()
+    return error
 
 
 def save_gray_image(grid, outfile, colormap):
@@ -22,34 +32,15 @@ def save_gray_image(grid, outfile, colormap):
     plt.close()
 
 
-class Trainer:
-    def __init__(
-            self,
-            model: torch.nn.Module,
-            config,
-            dataloader=None,
-            optimizer=None,
-    ) -> None:
-        """
-        Initialize the Trainer.
-        Args:
-            model (torch.nn.Module): The neural network model.
-            optimizer (torch.optim.Optimizer): The optimizer for model parameters.
-            config: Configuration settings.
-        """
-        self.config = config
-        self.gpu_id = get_rank()
-        self.model = model.to(self.gpu_id)
-        self.dataloader = dataloader
+class Trainer(Ddpm_base):
+
+    def __init__(self, model, config, dataloader=None,
+                 optimizer=None):
+        super().__init__(model, config, dataloader)
         self.optimizer = optimizer
         self.epochs_run = 0
-
-        self.snapshot_path = self.config.model_path
-        if self.dataloader is not None:
-            self.train_dataset = self.dataloader.dataset
-            self.stds = self.train_dataset.stds
-            self.means = self.train_dataset.means
         self.best_loss = float('inf')
+
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
                                                                  epochs=self.config.scheduler_epoch,
@@ -61,43 +52,6 @@ class Trainer:
                                                                  final_div_factor=1500.0)
         else:
             self.scheduler = None
-
-        if self.snapshot_path is not None:
-            if is_main_gpu():
-                print(f"#INFO : Loading snapshot")
-            self._load_snapshot(self.snapshot_path)
-
-        if dist.is_initialized():
-            dist.barrier()
-            self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-            self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.gpu_id],
-                                                             output_device=self.gpu_id)
-
-    def _load_snapshot(self, snapshot_path):
-        """
-        Load the snapshot of the training progress.
-        Args:
-            snapshot_path: Path to the snapshot file.
-        """
-        loc = f"cuda:{self.gpu_id}"
-        snapshot = torch.load(snapshot_path, map_location=loc)
-        if "SCHEDULER_STATE" in snapshot and self.scheduler is not None:
-            self.scheduler.load_state_dict(snapshot["SCHEDULER_STATE"])
-        if "WANDB_ID" in snapshot:
-            self.wandb_id = snapshot["WANDB_ID"]
-        self.model.load_state_dict(snapshot["MODEL_STATE"])
-        self.epochs_run = snapshot["EPOCHS_RUN"]
-        self.optimizer.load_state_dict(snapshot["OPTIMIZER_STATE"])
-        self.best_loss = snapshot["BEST_LOSS"]
-        self.stds = snapshot["STDS"]
-        self.means = snapshot["MEANS"]
-        if self.config.debug_log:
-            print(
-                f"\n#LOG : [GPU{self.gpu_id}] Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
-        elif is_main_gpu():
-            print(
-                f"#INFO : Resuming training from {snapshot_path} at Epoch {self.epochs_run}")
-        self.epochs_run += 1
 
     def _run_batch(self, batch):
         """
@@ -164,8 +118,13 @@ class Trainer:
             "EPOCHS_RUN": epoch,
             'OPTIMIZER_STATE': self.optimizer.state_dict(),
             'BEST_LOSS': loss,
-            'STDS': self.stds,
-            'MEANS': self.means,
+            'TIMESTAMP': self.timesteps,
+            'DATA': {
+                'STDS': self.stds,
+                'MEANS': self.means,
+                'V_IDX': self.config.var_indexes,
+                'CROP': self.config.crop,
+            }
         }
         if self.config.scheduler:
             snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
@@ -186,19 +145,22 @@ class Trainer:
 
         t = time.strftime("%d-%m-%y_%H-%M", time.localtime(time.time()))
         if self.config.resume:
-            wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'], entity=self.config.entityWDB,
+            wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'],
+                       entity=self.config.entityWDB,
                        name=f"{self.config.train_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                        "scheduler": self.scheduler.__class__,
                                                        "lr_base": self.optimizer.param_groups[0]["lr"],
-                                                       "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
+                                                       "weight_decay": self.optimizer.param_groups[0][
+                                                           "weight_decay"], }})
         else:
             wandb.init(project=self.config.wp, entity=self.config.entityWDB, mode=os.environ['WANDB_MODE'],
                        name=f"{self.config.train_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                        "scheduler": self.scheduler.__class__,
                                                        "lr_base": self.optimizer.param_groups[0]["lr"],
-                                                       "weight_decay": self.optimizer.param_groups[0]["weight_decay"], }})
+                                                       "weight_decay": self.optimizer.param_groups[0][
+                                                           "weight_decay"], }})
 
     def train(self):
         """
@@ -206,6 +168,7 @@ class Trainer:
         Returns:
             None
         """
+        filename_format = "sample_epoch{epoch}_{i}.npy"
         if is_main_gpu():
             self._init_wandb()
             loop = tqdm(range(self.epochs_run, self.config.epochs + self.epochs_run),
@@ -225,8 +188,11 @@ class Trainer:
                         f"{self.config.train_name}", "best.pt"), avg_loss)
 
                 if epoch % self.config.any_time == 0.0:
-                    self.sample_images(
-                        ep=str(epoch), nb_image=self.config.n_sample)
+                    samples = self._sample_batch(self.config.n_sample)
+                    for i, s in enumerate(samples):
+                        filename = filename_format.format(epoch = epoch, i = i)
+                        save_path = os.path.join(self.config.train_name, "samples", filename)
+                        np.save(save_path, s)
                     self._save_snapshot(epoch, os.path.join(
                         f"{self.config.train_name}", f"save_{epoch}.pt"), avg_loss)
 
@@ -245,23 +211,22 @@ class Trainer:
         """
         Generate and save sample images of the dataset.
         Args:
-            config: Configuration settings.
-            ep (str): Epoch identifier for filename.
-            nb_image (int): Number of images to generate.
+            nb_batch (int): Number of batch to reconstruct.
+            t_noise (int): Noise t.
         Returns:
             None
         """
-        # transformation to get original data values
-        invTrans = transforms.Compose([
-            transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                 std=[1 / el for el in self.stds]),
-            transforms.Normalize(mean=[-el for el in self.means],
-                                 std=[1.] * len(self.config.var_indexes)),
-        ])
-
-        # =========================
-        # plot batch dataset images
-        # =========================
+        # torch.manual_seed(0)
+        if self.config.invert_norm:
+            transforms_func = transforms.Compose([
+                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
+                                     std=[1 / el for el in self.stds]),
+                transforms.Normalize(mean=[-el for el in self.means],
+                                     std=[1.] * len(self.config.var_indexes)),
+            ])
+        else:
+            def transforms_func(x):
+                return x  # identity
 
         batchs = []
 
@@ -270,7 +235,7 @@ class Trainer:
             batch = next(iter(self.dataloader))
             print("batch", batch.shape)
             batchs.append(batch)
-            image_batch = invTrans(batch)
+            image_batch = transforms_func(batch)
             for img1 in image_batch:
                 self.plot_img(img1, i, "batch")
 
@@ -284,6 +249,8 @@ class Trainer:
             t = torch.ones((batch.shape[0],),
                            device=self.gpu_id).long() * t_noise
 
+            guidance_loss_scale = 20
+
             # normalize batch
             x_start = self.model.normalize(batch).to(self.gpu_id)
 
@@ -291,24 +258,33 @@ class Trainer:
             noise = torch.randn_like(x_start).to(self.gpu_id)
 
             # Forward Diffusion : add noise to x_start
-            img = self.model.q_sample(x_start=x_start, t=t, noise=noise)
+            # img = self.model.q_sample(x_start=x_start, t=t, noise=noise)
+            img = noise
 
-            # Reverse Diffusion : add noise to x_start
             for t in tqdm(reversed(range(0, t.item())), desc='sampling loop time step', total=t.item()):
                 img, _ = self.model.p_sample(img, t, None)
+                img = img.detach().requires_grad_()
+
+                loss = image_basic_loss(img, batch) * guidance_loss_scale
+                if t % 10 == 0:
+                    print(i, "loss:", loss.item())
+                cond_grad = -torch.autograd.grad(loss, img)[0]
+
+                img = img.detach() + cond_grad
 
             # unnormalize img
             sampled_images = self.model.unnormalize(img)
 
             # back to original values
-            sampled_images_unnorm = invTrans(sampled_images)
+            sampled_images_unnorm = transforms_func(sampled_images)
             np_img = sampled_images_unnorm.cpu()
 
             # plot reconsruction images
             for img1 in np_img:
-                self.plot_img(img1, i, "recon")
+                self.plot_img(img1, i, "recon_20_")
+                # self.plot_img(img1, i, "reconwithoutguid")
 
-    def sample_images(self, ep=None, nb_image=4):
+    def sample_train(self, ep=None, nb_img=4):
         """
         Generate and save sample images during training.
         Args:
@@ -317,96 +293,40 @@ class Trainer:
         Returns:
             None
         """
-        if is_main_gpu():
-            print(f"Sampling {nb_image * torch.cuda.device_count()} images...")
+        if nb_img > 6:
+            Warning(
+                "Sampling more than 6 images may long to compute because sampling use only main GPU.")
 
-        if self.config.invert_norm:
-            transforms_func = transforms.Compose([
-                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                     std=[1 / el for el in self.stds]),
-                transforms.Normalize(mean=[-el for el in self.means],
-                                     std=[1.] * len(self.config.var_indexes)),
-            ])
-        else:
-            # identity
-            def transforms_func(x): return x
-        b = 0
-        i = self.gpu_id
-
-        with tqdm(total=nb_image // self.config.batch_size, desc="Sampling ", unit="batch") as pbar:
-            while b < nb_image:
-                batch_size = min(nb_image - b, self.config.batch_size)
-
-                sampled_images = self.model.module.sample(
-                    batch_size=batch_size) if dist.is_initialized() else self.model.sample(batch_size=batch_size)
-                print("sampled_images", sampled_images.shape)
-
-                b += batch_size
-                sampled_images = transforms_func(sampled_images)
-                np_img = sampled_images.cpu().numpy()
-                for img1 in np_img:
-                    if ep is not None:
-                        np.save(os.path.join(
-                            f"{self.config.train_name}", "samples", f"_sample_{ep}_{i}.npy"), img1.numpy())
-                    else:
-
-                        np.save(os.path.join(
-                            f"{self.config.train_name}", "samples", f"_sample_{i}.npy"), img1.numpy())
-                        if self.config.plot_image:
-
-                            self.plot_img(img1, i, "sample")
-                            # img1 = torch.transpose(img1, 0, 2)
-                            # img1 = torch.fliplr(img1)
-                            # img1 = torch.transpose(img1, 0, 2)
-
-                            # save_gray_image(img1[0, :, :].numpy(), os.path.join(
-                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_u.png"), 'viridis')
-                            # save_gray_image(img1[1, :, :].numpy(), os.path.join(
-                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_v.png"), 'viridis')
-                            # save_gray_image(img1[2, :, :].numpy(), os.path.join(
-                            #     f"{self.config.train_name}", "samples", f"_sample_{i}_t.png"), 'RdBu_r')
-
-                    if torch.cuda.device_count() > 1 and self.config.mode == "Test":
-                        i += torch.cuda.device_count()
-                    else:
-                        i += 1
-                pbar.update(1)
-
-        # Plotting images for evolution
-        if is_main_gpu() and self.config.mode == 'Train':
-            fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(
-                self.config.var_indexes), figsize=(10, 10))
-            for i in range(min(6, nb_image)):
-                for j in range(len(self.config.var_indexes)):
-                    cmap = 'viridis' if self.config.var_indexes[j] != 't2m' else 'bwr'
-                    image = np_img[i, j]
-                    if len(self.config.var_indexes) > 1:
-                        im = axes[i, j].imshow(
-                            image, cmap=cmap, origin='lower')
-                        axes[i, j].axis('off')
-                        fig.colorbar(im, ax=axes[i, j])
-                    else:
-                        im = axes[i].imshow(image, cmap=cmap, origin='lower')
-                        axes[i].axis('off')
-                        fig.colorbar(im, ax=axes[i])
-
-            plt.savefig(os.path.join(f"{self.config.train_name}", "samples", f"all_images_grid_{ep}.jpg"),
-                        bbox_inches='tight')
-            plt.close()
-
+        print(f"Sampling {nb_img} images...")
+        samples = super()._sample_batch(nb_img=nb_img)
+        for i, img in enumerate(samples):
+            filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
+            save_path = os.path.join(self.config.train_name, "samples", filename)
+            np.save(save_path, img)
+        self.plot_grid(ep, samples)
         print(
             f"\nSampling done. Images saved in {self.config.train_name}/samples/")
 
-    def plot_img(self, img1, i, name):
-        img1 = torch.transpose(img1, 0, 2)
-        img1 = torch.fliplr(img1)
-        img1 = torch.transpose(img1, 0, 2)
-        save_gray_image(img1[0, :, :].numpy(), os.path.join(
-            f"{self.config.train_name}", "samples", f"_{name}_{i}_u.png"), 'viridis')
-        save_gray_image(img1[1, :, :].numpy(), os.path.join(
-            f"{self.config.train_name}", "samples", f"_{name}_{i}_v.png"), 'viridis')
-        save_gray_image(img1[2, :, :].numpy(), os.path.join(
-            f"{self.config.train_name}", "samples", f"_{name}_{i}_t.png"), 'RdBu_r')
+    def plot_grid(self, ep, np_img):
+        nb_image = len(np_img)
+        fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(
+            self.config.var_indexes), figsize=(10, 10))
+        for i in range(min(6, nb_image)):
+            for j in range(len(self.config.var_indexes)):
+                cmap = 'viridis' if self.config.var_indexes[j] != 't2m' else 'bwr'
+                image = np_img[i, j]
+                if len(self.config.var_indexes) > 1:
+                    im = axes[i, j].imshow(
+                        image, cmap=cmap, origin='lower')
+                    axes[i, j].axis('off')
+                    fig.colorbar(im, ax=axes[i, j])
+                else:
+                    im = axes[i].imshow(image, cmap=cmap, origin='lower')
+                    axes[i].axis('off')
+                    fig.colorbar(im, ax=axes[i])
+        plt.savefig(os.path.join(f"{self.config.train_name}", "samples", f"all_images_grid_{ep}.jpg"),
+                    bbox_inches='tight')
+        plt.close()
 
     def _log(self, epoch, log_dict):
         """
