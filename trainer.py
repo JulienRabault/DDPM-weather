@@ -1,41 +1,30 @@
 import csv
 import os.path
 import time
-import warnings
 from pathlib import Path
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import wandb
-from torch import distributed as dist, nn as nn
-from torchvision import transforms
+from torch import distributed as dist
 from tqdm import tqdm
 
-from Ddpm_base import Ddpm_base
+from ddpm_base import Ddpm_base
 from distributed import is_main_gpu
-
-
-def image_basic_loss(images, target_image):
-    """
-    Given a target image, return a loss for how far away on average
-    the images' pixels are from that image.
-    """
-    error = torch.abs(images - target_image).mean()
-    return error
-
-
-def save_gray_image(grid, outfile, colormap):
-    plt.imshow(grid, cmap=colormap)
-    plt.colorbar()
-    plt.savefig(outfile)
-    plt.close()
 
 
 class Trainer(Ddpm_base):
 
     def __init__(self, model, config, dataloader=None,
                  optimizer=None):
+        """
+        Initialize the Trainer class.
+        Args:
+            model: The neural network model for training.
+            config: Configuration settings for training.
+            dataloader: The data loader for training data.
+            optimizer: The optimizer for model parameter updates.
+        """
         super().__init__(model, config, dataloader)
         self.optimizer = optimizer
         self.epochs_run = 0
@@ -62,7 +51,6 @@ class Trainer(Ddpm_base):
             float: Loss value for the batch.
         """
         self.optimizer.zero_grad()
-        print("batch", batch.shape)
 
         loss = self.model(batch)
         loss.backward()
@@ -89,7 +77,7 @@ class Trainer(Ddpm_base):
         else:
             loop = enumerate(self.dataloader)
         for i, batch in loop:
-            batch = batch.to(self.gpu_id)
+            batch, _ = batch.to(self.gpu_id)
             loss = self._run_batch(batch)
             total_loss += loss
             if self.config.scheduler:
@@ -147,7 +135,7 @@ class Trainer(Ddpm_base):
         if self.config.resume:
             wandb.init(project=self.config.wp, resume="auto", mode=os.environ['WANDB_MODE'],
                        entity=self.config.entityWDB,
-                       name=f"{self.config.train_name}_{t}/",
+                       name=f"{self.config.run_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                        "scheduler": self.scheduler.__class__,
                                                        "lr_base": self.optimizer.param_groups[0]["lr"],
@@ -155,7 +143,7 @@ class Trainer(Ddpm_base):
                                                            "weight_decay"], }})
         else:
             wandb.init(project=self.config.wp, entity=self.config.entityWDB, mode=os.environ['WANDB_MODE'],
-                       name=f"{self.config.train_name}_{t}/",
+                       name=f"{self.config.run_name}_{t}/",
                        config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
                                                        "scheduler": self.scheduler.__class__,
                                                        "lr_base": self.optimizer.param_groups[0]["lr"],
@@ -185,104 +173,27 @@ class Trainer(Ddpm_base):
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
                     self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.train_name}", "best.pt"), avg_loss)
+                        f"{self.config.run_name}", "best.pt"), avg_loss)
 
                 if epoch % self.config.any_time == 0.0:
                     samples = self._sample_batch(self.config.n_sample)
                     for i, s in enumerate(samples):
-                        filename = filename_format.format(epoch = epoch, i = i)
-                        save_path = os.path.join(self.config.train_name, "samples", filename)
+                        filename = filename_format.format(epoch=epoch, i=i)
+                        save_path = os.path.join(self.config.run_name, "samples", filename)
                         np.save(save_path, s)
                     self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.train_name}", f"save_{epoch}.pt"), avg_loss)
+                        f"{self.config.run_name}", f"save_{epoch}.pt"), avg_loss)
 
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
                 self._log(epoch, log)
                 self._save_snapshot(epoch, os.path.join(
-                    f"{self.config.train_name}", "last.pt"), avg_loss)
+                    f"{self.config.run_name}", "last.pt"), avg_loss)
 
         if is_main_gpu():
             wandb.finish()
             print(
-                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.train_name}', 'best.pt')}")
-
-    def reconstruct_images(self, nb_batch=1, t_noise=999):
-        """
-        Generate and save sample images of the dataset.
-        Args:
-            nb_batch (int): Number of batch to reconstruct.
-            t_noise (int): Noise t.
-        Returns:
-            None
-        """
-        # torch.manual_seed(0)
-        if self.config.invert_norm:
-            transforms_func = transforms.Compose([
-                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                     std=[1 / el for el in self.stds]),
-                transforms.Normalize(mean=[-el for el in self.means],
-                                     std=[1.] * len(self.config.var_indexes)),
-            ])
-        else:
-            def transforms_func(x):
-                return x  # identity
-
-        batchs = []
-
-        for i in tqdm(range(nb_batch)):
-
-            batch = next(iter(self.dataloader))
-            print("batch", batch.shape)
-            batchs.append(batch)
-            image_batch = transforms_func(batch)
-            for img1 in image_batch:
-                self.plot_img(img1, i, "batch")
-
-        # ==============================================
-        # plot recons images from previous dataset batch
-        # ==============================================
-
-        for i, batch in tqdm(enumerate(batchs)):
-
-            # get a t such as  0 < t   and t < num_timesteps=1000
-            t = torch.ones((batch.shape[0],),
-                           device=self.gpu_id).long() * t_noise
-
-            guidance_loss_scale = 20
-
-            # normalize batch
-            x_start = self.model.normalize(batch).to(self.gpu_id)
-
-            # get a random noise
-            noise = torch.randn_like(x_start).to(self.gpu_id)
-
-            # Forward Diffusion : add noise to x_start
-            # img = self.model.q_sample(x_start=x_start, t=t, noise=noise)
-            img = noise
-
-            for t in tqdm(reversed(range(0, t.item())), desc='sampling loop time step', total=t.item()):
-                img, _ = self.model.p_sample(img, t, None)
-                img = img.detach().requires_grad_()
-
-                loss = image_basic_loss(img, batch) * guidance_loss_scale
-                if t % 10 == 0:
-                    print(i, "loss:", loss.item())
-                cond_grad = -torch.autograd.grad(loss, img)[0]
-
-                img = img.detach() + cond_grad
-
-            # unnormalize img
-            sampled_images = self.model.unnormalize(img)
-
-            # back to original values
-            sampled_images_unnorm = transforms_func(sampled_images)
-            np_img = sampled_images_unnorm.cpu()
-
-            # plot reconsruction images
-            for img1 in np_img:
-                self.plot_img(img1, i, "recon_20_")
-                # self.plot_img(img1, i, "reconwithoutguid")
+                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
 
     def sample_train(self, ep=None, nb_img=4):
         """
@@ -301,32 +212,12 @@ class Trainer(Ddpm_base):
         samples = super()._sample_batch(nb_img=nb_img)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
-            save_path = os.path.join(self.config.train_name, "samples", filename)
+            save_path = os.path.join(self.config.run_name, "samples", filename)
             np.save(save_path, img)
-        self.plot_grid(ep, samples)
+        if self.config.plot:
+            self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         print(
-            f"\nSampling done. Images saved in {self.config.train_name}/samples/")
-
-    def plot_grid(self, ep, np_img):
-        nb_image = len(np_img)
-        fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(
-            self.config.var_indexes), figsize=(10, 10))
-        for i in range(min(6, nb_image)):
-            for j in range(len(self.config.var_indexes)):
-                cmap = 'viridis' if self.config.var_indexes[j] != 't2m' else 'bwr'
-                image = np_img[i, j]
-                if len(self.config.var_indexes) > 1:
-                    im = axes[i, j].imshow(
-                        image, cmap=cmap, origin='lower')
-                    axes[i, j].axis('off')
-                    fig.colorbar(im, ax=axes[i, j])
-                else:
-                    im = axes[i].imshow(image, cmap=cmap, origin='lower')
-                    axes[i].axis('off')
-                    fig.colorbar(im, ax=axes[i])
-        plt.savefig(os.path.join(f"{self.config.train_name}", "samples", f"all_images_grid_{ep}.jpg"),
-                    bbox_inches='tight')
-        plt.close()
+            f"\nSampling done. Images saved in {self.config.run_name}/samples/")
 
     def _log(self, epoch, log_dict):
         """
@@ -339,7 +230,7 @@ class Trainer(Ddpm_base):
         """
         wandb.log(log_dict, step=epoch)
         csv_filename = os.path.join(
-            f"{self.config.train_name}", "logs_train.csv")
+            f"{self.config.run_name}", "logs_train.csv")
         file_exists = Path(csv_filename).is_file()
         with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
             fieldnames = ['epoch'] + list(log_dict.keys())

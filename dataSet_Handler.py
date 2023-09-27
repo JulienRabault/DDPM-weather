@@ -10,15 +10,15 @@ DataSet class from Importance_Sampled images
 """
 
 import os
+import re
 
 import numpy as np
 import pandas as pd
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
 
 ################ reference dictionary to know what variables to sample where
-################ do not modify unless you know what you are doing
+################ do not modify unless you know what you are doing 
 
 var_dict = {'rr': 0, 'u': 1, 'v': 2, 't2m': 3, 'orog': 4}
 
@@ -54,7 +54,8 @@ class ISDataset(Dataset):
 
     def __getitem__(self, idx):
         # idx=idx+19
-        sample_path = os.path.join(self.data_dir, self.labels.iloc[idx, 0])
+        file_name = self.labels.iloc[idx, 0]
+        sample_path = os.path.join(self.data_dir, file_name)
         sample = np.float32(np.load(sample_path + '.npy')) \
             [self.VI, self.CI[0]:self.CI[1], self.CI[2]:self.CI[3]]
 
@@ -67,39 +68,5 @@ class ISDataset(Dataset):
             ]
         )
         sample = self.transform(sample)
-        return sample
-
-#
-# class ISData_Loader():
-#
-#     def __init__(self, path, batch_size, var_indexes, crop_indexes, \
-#                  shuf=False, add_coords=False, device='cuda'):
-#         self.path = path
-#         self.batch = batch_size
-#
-#         self.shuf = shuf  # shuffle performed once per epoch
-#
-#         self.VI = var_indexes
-#         self.CI = crop_indexes
-#         # self.img_size=img_size
-#
-#         Means = np.load(path + 'mean_with_orog.npy')[self.VI]
-#         Maxs = np.load(path + 'max_with_orog.npy')[self.VI]
-#
-#         self.means = list(tuple(Means))
-#         self.stds = list(tuple((1.0 / 0.95) * (Maxs)))
-#         self.add_coords = add_coords
-#
-#     def loader(self):
-#         from multiprocessing import cpu_count
-#         self.device = 'cuda'
-#         dataset = ISDataset(self.path, 'IS_method_labels.csv', self.VI, self.CI, self.device)
-#
-#         loader = DataLoader(dataset=dataset,
-#                             batch_size=self.batch,
-#                             num_workers=cpu_count(),
-#                             pin_memory=True,
-#                             shuffle=True,
-#                             drop_last=True,
-#                             )
-#         return loader, dataset
+        sample_id = re.search(r'\d+', file_name).group()
+        return sample, sample_id

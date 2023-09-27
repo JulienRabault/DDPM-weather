@@ -5,19 +5,24 @@ from torch import distributed as dist
 def get_rank():
     if not torch.cuda.is_available():
         return 'cpu'
-    if not dist.is_available():
-        return 0
+    if torch.cuda.device_count() < 2:
+        return 'cuda'
+    return "cuda:" + str(dist.get_rank())
 
-    if not dist.is_initialized():
-        return 0
 
+def get_rank_num():
+    if not torch.cuda.is_available():
+        return 0
+    if torch.cuda.device_count() < 2:
+        return 0
     return dist.get_rank()
 
+
 def is_main_gpu():
-    if not dist.is_available():
-        return 1
-    if not dist.is_initialized():
-        return 1
+    if not torch.cuda.is_available():
+        return True
+    if torch.cuda.device_count() < 2:
+        return True
     return dist.get_rank() == 0
 
 def synchronize():

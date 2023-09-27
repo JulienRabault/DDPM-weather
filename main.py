@@ -12,9 +12,9 @@ from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
-import DataSet_Handler
-from Sampler import Sampler
-from distributed import get_rank, is_main_gpu
+import dataSet_Handler
+from distributed import get_rank, is_main_gpu, get_rank_num
+from sampler import Sampler
 from trainer import Trainer
 
 warnings.filterwarnings(
@@ -36,7 +36,7 @@ def ddp_setup(config):
         world_size=torch.cuda.device_count())
     if config.debug_log:
         print(
-            f"\n#LOG : [GPU{get_rank()}] init_process_group(backend={'nccl' if dist.is_nccl_available() else 'gloo'})")
+            f"\n#LOG : [GPU{get_rank_num()}] init_process_group(backend={'nccl' if dist.is_nccl_available() else 'gloo'})")
     torch.cuda.set_device(get_rank())
 
 
@@ -59,7 +59,8 @@ def load_train_objs(config):
         image_size=config.image_size,
         timesteps=1000,
         beta_schedule=config.beta_schedule,
-        auto_normalize=config.auto_normalize
+        auto_normalize=config.auto_normalize,
+        sampling_timesteps=config.ddim_timesteps,
     )
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.lr, betas=config.adam_betas)
@@ -75,16 +76,16 @@ def prepare_dataloader(config, path):
     Returns:
         DataLoader: Data loader.
     """
-    train_set = DataSet_Handler.ISDataset(config, path)
+    train_set = dataSet_Handler.ISDataset(config, path)
 
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
         pin_memory=True,
-        shuffle=not dist.is_initialized(),
+        shuffle=not torch.cuda.device_count() >= 2,
         num_workers=cpu_count(),
-        sampler=DistributedSampler(train_set, rank=get_rank(), shuffle=True,
-                                   drop_last=False) if dist.is_initialized() else None,
+        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=True,
+                                   drop_last=False) if torch.cuda.device_count() >= 2 else None,
         drop_last=False
     )
 
@@ -108,7 +109,7 @@ def save_config(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    with open(f"{config.train_name}/config.txt", 'w') as f:
+    with open(f"{config.run_name}/config.txt", 'w') as f:
         for arg in vars(config):
             f.write(f"\t{arg}: {getattr(config, arg)}\n")
 
@@ -148,7 +149,6 @@ def check_config(config):
 
         config.n_sample = n_sample // world_size
 
-    # Determine variable indexes
     config.var_indexes = ['t2m'] if config.v_i == 1 else [
         'u', 'v'] if config.v_i == 2 else ['u', 'v', 't2m']
 
@@ -173,12 +173,12 @@ def check_path(config):
         elif config.mode != 'Train':
             print('#INFO: Mode Sample selected')
     paths = [
-        f"{config.train_name}/",
-        f"{config.train_name}/samples/",
+        f"{config.run_name}/",
+        f"{config.run_name}/samples/",
     ]
     if config.mode == 'Train':
-        paths.append(f"{config.train_name}/WANDB/")
-        paths.append(f"{config.train_name}/WANDB/cache")
+        paths.append(f"{config.run_name}/WANDB/")
+        paths.append(f"{config.run_name}/WANDB/cache")
     # Check paths if resuming, else create them
     if is_main_gpu():
         if config.resume:
@@ -188,7 +188,7 @@ def check_path(config):
                         f"The following directories do not exist: {path}")
         else:
             train_num = 1
-            train_name = config.train_name
+            train_name = config.run_name
             while os.path.exists(train_name):
                 if f"_{train_num}" in train_name:
                     train_name = "_".join(train_name.split(
@@ -196,14 +196,14 @@ def check_path(config):
                     train_num += 1
                 else:
                     train_name = f"{train_name}_{train_num}"
-            config.train_name = train_name
+            config.run_name = train_name
             paths = [
-                f"{config.train_name}/",
-                f"{config.train_name}/samples/",
+                f"{config.run_name}/",
+                f"{config.run_name}/samples/",
             ]
             if config.mode == 'Train':
-                paths.append(f"{config.train_name}/WANDB/")
-                paths.append(f"{config.train_name}/WANDB/cache")
+                paths.append(f"{config.run_name}/WANDB/")
+                paths.append(f"{config.run_name}/WANDB/cache")
             for path in paths:
                 print(f"Creating directory {path}")
                 os.makedirs(path, exist_ok=True)
@@ -227,10 +227,10 @@ def main_train(config):
         print(f"\n#LOG: Training execution time: {total_time} seconds")
     if is_main_gpu():
         # Sample best model
-        config.model_path = f"{config.train_name}/best.pt"
+        config.model_path = f"{config.run_name}/best.pt"
         model, _ = load_train_objs(config)
         sampler = Sampler(model, config)
-        sampler.sample(filename_format="sample_best_{i}.npy", nb_img=config.n_sample)
+        sampler.sample(filename_format="sample_best_{i}.npy", nb_img=config.n_sample, plot=config.plot)
 
 
 def main_sample(config):
@@ -239,14 +239,13 @@ def main_sample(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-
     model, _ = load_train_objs(config)
     sampler = Sampler(model, config)
     if config.guided is None:
-        sampler.sample(nb_img=config.n_sample)
+        sampler.sample(nb_img=config.n_sample, plot=config.plot)
     else:
         train_data = prepare_dataloader(config, path=config.guided)
-        sampler.guided_sample(train_data)
+        sampler.guided_sample(train_data, plot=config.plot, random_noise=config.random_noise)
 
 
 def get_parser():
@@ -256,16 +255,24 @@ def get_parser():
     general_args = parser.add_argument_group('General Parameters')
     general_args.add_argument(dest='mode', choices=['Train', 'Sample'],
                               help='Execution mode: Choose between Train or Sample')
-    general_args.add_argument('-t', '--train_name', type=str, default='train', help='Name for the training run')
-    general_args.add_argument('-bs', '--batch_size', type=int, default=128, help='Batch size')
-    general_args.add_argument('-s', '--n_sample', type=int, default=200, help='Number of samples to generate')
+    general_args.add_argument('--run_name', type=str, default='run', help='Name for the training run')
+    general_args.add_argument('-bs', '--batch_size', type=int, default=32, help='Batch size')
     general_args.add_argument('-a', '--any_time', type=int, default=400,
                               help='Every how many epochs to save and sample')
     general_args.add_argument('-mp', '--model_path', type=str, default=None,
                               help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
     general_args.add_argument("--debug", dest="debug_log", default=False, action="store_true",
                               help="Enable debug logs")
-    general_args.add_argument("-g", "--guide_data", dest="guided", type=str, default=None, help="Path to guided data")
+
+    # Sampling parameters
+    sample_args = parser.add_argument_group('Sampling Parameters')
+    sample_args.add_argument('-ddim', '--ddim_timesteps', type=int, default=None,
+                             help='If not None, will sample from the ddim methode with the specified number of timesteps')
+    sample_args.add_argument("-p", "--plot", dest="plot", default=False, action="store_true")
+    sample_args.add_argument("-g", "--guide_data", dest="guided", type=str, default=None, help="Path to guided data")
+    sample_args.add_argument('-s', '--n_sample', type=int, default=10, help='Number of samples to generate')
+    sample_args.add_argument('-rn', '--random_noise', type=bool, default=False,
+                             help='Use random noise for x_start in guided sampling')
 
     # Data parameters
     data_args = parser.add_argument_group('Data Parameters')
@@ -309,9 +316,7 @@ def get_parser():
 if __name__ == "__main__":
 
     config = get_parser().parse_args()
-
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <=  batch_size'
-
     ddp_setup(config)
     local_rank = get_rank()
     print("local_rank : ", local_rank)
@@ -322,8 +327,8 @@ if __name__ == "__main__":
         os.environ['WANDB_MODE'] = 'disabled'
     else:
         os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = f"{config.train_name}/WANDB/cache"
-        os.environ['WANDB_DIR'] = f"{config.train_name}/WANDB/"
+        os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
+        os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
 
     if is_main_gpu():
         print_config(config)
