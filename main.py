@@ -67,7 +67,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config, path):
+def prepare_dataloader(config, path, csv_file):
     """
     Prepare the data loader.
     Args:
@@ -76,7 +76,7 @@ def prepare_dataloader(config, path):
     Returns:
         DataLoader: Data loader.
     """
-    train_set = dataSet_Handler.ISDataset(config, path)
+    train_set = dataSet_Handler.ISDataset(config, path, csv_file)
 
     return DataLoader(
         train_set,
@@ -216,7 +216,7 @@ def main_train(config):
         config (Namespace): Configuration parameters.
     """
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config, path=config.data_dir)
+    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file,)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data,
                       optimizer=optimizer)
@@ -244,7 +244,7 @@ def main_sample(config):
     if config.guided is None:
         sampler.sample(nb_img=config.n_sample, plot=config.plot)
     else:
-        train_data = prepare_dataloader(config, path=config.guided)
+        train_data = prepare_dataloader(config, path=config.guided, csv_file=config.csv_file)
         sampler.guided_sample(train_data, plot=config.plot, random_noise=config.random_noise)
 
 

@@ -123,71 +123,9 @@ python main.py Sample --run_name my_run --n_sample 50
 ```python
 python -m torch.distributed.run --standalone --nproc_per_node  mon_script.py Train --run_name my_training_run --batch_size 32 --lr 0.001 --epochs 50
 ```
-## Usage spécifique à PRIAM
 
-Il y a 2 fichiers `.slurm`, un pour faire des samples a partir d'un modele et un pour lancer un train. 
+4. Reprendre l'entraînement à partir d'un point de contrôle :
 
-### run_train.slurm
-
-#### 1. Modifier selon vos dossiers 
-
-Selon vos données et home_dir
+```python
+python main.py Train --run_name my_training_run --batch_size 32 --lr 1e-4 --epochs 50 --model_path my_checkpoint.pt --resume
 ```
-HOME_DIR="/scratch/mrmn/xx_user_xx/DDPM-for-meteo/"
-DATA_DIR="/scratch/mrmn/xx_user_xx/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"
-```
-```
-#SBATCH --job-name='train'        <-- Le nom du job
-#SBATCH --partition=node1         <-- La partition en fonction des dispo, node1 ou node3
-#SBATCH --gres=gpu:v100:2         <-- Le nombre de gpu voulu, max 4
-#SBATCH --error="train.err"       <-- Pour suivre l'entrainnement avec 'tail -f train.err' ou 'cat train.err'
-#SBATCH --output="train.err"      <-|
-```
-
-La derniere ligne aussi !
-
-#### 2. Modifier les parametres selon [Options Disponibles](#options-disponibles)
-Derniere ligne, mettre `|` entres les parametres
-```
-srun -w $(hostname -s) --nodes=1 --ntasks-per-node=1 --ntasks=1 $SLURM_SCRIPT primary $HOROVOD_CONTAINER $UID $GID $HOME_DIR $OUTPUT_DIR $DATA_DIR $PYTHON_SCRIPT "Train|--v_i | 3 | --data_dir| "/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"| --run_name |"/scratch/mrmn/rabaultj/DDPM-for-meteo/test" |--epochs | 10 |--batch_size | 16 |--any_time | 50 "
-```
-
-### run_sample.slurm
-
-#### 1. Modifier selon vos dossiers 
-
-Selon vos données et home_dir
-```
-HOME_DIR="/scratch/mrmn/rabaultj/DDPM-for-meteo/"
-DATA_DIR="/scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/"
-```
-```
-#SBATCH --job-name='sample_ddpm'        <-- Le nom du job
-#SBATCH --partition=node1         <-- La partition en fonction des dispo, node1 ou node3
-#SBATCH --gres=gpu:v100:2         <-- Le nombre de gpu voulu, max 4
-#SBATCH --error="Sample.err"       <-- Pour suivre l'entrainnement avec 'tail -f Sample.err' ou 'cat Sample.err'
-#SBATCH --output="Sample.err"      <-|
-```
-
-La derniere ligne aussi !
-
-#### 2. Modifier les parametres selon [Options Disponibles](#options-disponibles)
-
-```
-PYTHON_SCRIPT="${HOME_DIR}main.py"
-MODEL_DIR="Train_uv_final/best.pt"
-SAMPLE_DIR="Sample_final_uv"
-SCRATCH_DIR="/scratch/mrmn/rabaultj/"
-N_SAMPLES=10
-```
-
-Derniere ligne, mettre `|` entres les parametres
-```
-srun -w $(hostname -s) --nodes=1 --ntasks-per-node=1 --ntasks=1 $SLURM_SCRIPT primary $HOROVOD_CONTAINER $UID $GID $HOME_DIR $OUTPUT_DIR $DATA_DIR $PYTHON_SCRIPT "Sample |--n_sample | ${N_SAMPLES} | --data_dir| /scratch/mrmn/brochetc/GAN_2D/datasets_full_indexing/IS_1_1.0_0_0_0_0_0_256_done/| --run_name |/scratch/mrmn/rabaultj/DDPM-for-meteo/${SAMPLE_DIR} |--batch_size | 128 |--model_path | /scratch/mrmn/rabaultj/DDPM-for-meteo/${MODEL_DIR} "
-```
-## Lancement
-
-`sbatch run_train.slurm` ou `sbatch run_sample.slurm`
-
-
-

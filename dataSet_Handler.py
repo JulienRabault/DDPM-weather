@@ -26,9 +26,9 @@ var_dict = {'rr': 0, 'u': 1, 'v': 2, 't2m': 3, 'orog': 4}
 ################
 class ISDataset(Dataset):
 
-    def __init__(self, config,path, add_coords=False):
+    def __init__(self, config,path, csv_file, add_coords=False):
         self.data_dir = path
-        self.labels = pd.read_csv(os.path.join(path, 'IS_method_labels.csv'))
+        self.labels = pd.read_csv(os.path.join(path, csv_file))
 
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
