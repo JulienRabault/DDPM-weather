@@ -2,3 +2,6 @@
 __pycache__
 data
 model
+slurm-docker-run_perso
+*.slurm
+run.sh

@@ -277,6 +277,7 @@ def get_parser():
     # Data parameters
     data_args = parser.add_argument_group('Data Parameters')
     data_args.add_argument('-dd', '--data_dir', type=str, default=None, help='Directory containing the data')
+    data_args.add_argument('--csv_file', type=str, default=None, help='Path to the csv file containing the labels data')
     data_args.add_argument('-nvi', '--v_i', type=int, default=3, help='Number of variable indices')
     data_args.add_argument('-vi', '--var_indexes', type=list, default=['u', 'v', 't2m'],
                            help='List of variable indices')
