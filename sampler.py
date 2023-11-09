@@ -19,7 +19,7 @@ class Sampler(Ddpm_base):
             dataloader: The data loader for input data (optional).
         """
         super().__init__(model, config, dataloader)
-        self.loss_func = loss_dict["L1"]
+        self.loss_func = loss_dict["L1Loss"]
 
     def _guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
         """

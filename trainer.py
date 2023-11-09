@@ -65,7 +65,6 @@ class Trainer(Ddpm_base):
         Returns:
             float: Average loss for the epoch.
         """
-        b_sz = len(next(iter(self.dataloader)))
         iters = len(self.dataloader)
         if dist.is_initialized():
             self.dataloader.sampler.set_epoch(epoch)
@@ -86,7 +85,7 @@ class Trainer(Ddpm_base):
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
         if self.config.debug_log:
             print(
-                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
+                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         return total_loss / len(self.dataloader)
 
