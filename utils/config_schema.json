@@ -1,0 +1,155 @@
+{
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": ["Train", "Sample"],
+      "description": "Execution mode: Choose between Train or Sample"
+    },
+    "run_name": {
+      "type": "string",
+      "default": "run",
+      "description": "Name for the training run"
+    },
+    "batch_size": {
+      "type": "integer",
+      "default": 32,
+      "description": "Batch size"
+    },
+    "any_time": {
+      "type": "integer",
+      "default": 400,
+      "description": "Every how many epochs to save and sample"
+    },
+    "model_path": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Path to the model for loading and resuming training if necessary (no path will start training from scratch)"
+    },
+    "ddim_timesteps": {
+      "type": ["integer", "null"],
+      "default": null,
+      "description": "If not None, will sample from the ddim method with the specified number of timesteps"
+    },
+    "plot": {
+      "type": "boolean",
+      "default": false
+    },
+    "guided": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Path to guided data"
+    },
+    "n_sample": {
+      "type": "integer",
+      "default": 10,
+      "description": "Number of samples to generate"
+    },
+    "random_noise": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use random noise for x_start in guided sampling"
+    },
+    "data_dir": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Directory containing the data"
+    },
+    "csv_file": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Path to the csv file containing the labels data"
+    },
+    "v_i": {
+      "type": "integer",
+      "default": 3,
+      "description": "Number of variable indices"
+    },
+    "var_indexes": {
+      "type": "array",
+      "default": ["u", "v", "t2m"],
+      "description": "List of variable indices"
+    },
+    "crop": {
+      "type": "array",
+      "default": [78, 206, 55, 183],
+      "description": "Crop parameters for images"
+    },
+    "auto_normalize": {
+      "type": "boolean",
+      "default": false,
+      "description": "Automatically normalize"
+    },
+    "invert_norm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Invert normalization of image samples"
+    },
+    "image_size": {
+      "type": "integer",
+      "default": 128,
+      "description": "Size of the image"
+    },
+    "mean_file": {
+      "type": "string",
+      "default": "mean_with_orog.npy",
+      "description": "Mean file path"
+    },
+    "max_file": {
+      "type": "string",
+      "default": "max_with_orog.npy",
+      "description": "Max file path"
+    },
+    "scheduler": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use scheduler for learning rate"
+    },
+    "scheduler_epoch": {
+      "type": "integer",
+      "default": 150,
+      "description": "Number of epochs for scheduler to downscale (save for resume)"
+    },
+    "resume": {
+      "type": "boolean",
+      "default": false,
+      "description": "Resume from checkpoint"
+    },
+    "lr": {
+      "type": "number",
+      "default": 5e-4,
+      "description": "Learning rate"
+    },
+    "adam_betas": {
+      "type": "array",
+      "default": [0.9, 0.99],
+      "description": "Betas for the Adam optimizer"
+    },
+    "epochs": {
+      "type": "integer",
+      "default": 150,
+      "description": "Number of epochs to train for"
+    },
+    "beta_schedule": {
+      "type": "string",
+      "default": "cosine",
+      "description": "Beta schedule type (cosine or linear)"
+    },
+    "wandbproject": {
+      "type": "string",
+      "default": "meteoDDPM",
+      "description": "Wandb project name"
+    },
+    "use_wandb": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use wandb for logging"
+    },
+    "entityWDB": {
+      "type": "string",
+      "default": "jrabault",
+      "description": "Wandb entity name"
+    }
+  },
+  "required": ["mode", "run_name", "batch_size"]
+}

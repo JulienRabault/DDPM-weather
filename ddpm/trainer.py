@@ -1,4 +1,5 @@
 import csv
+import logging
 import os.path
 import time
 from pathlib import Path
@@ -9,8 +10,10 @@ import wandb
 from torch import distributed as dist
 from tqdm import tqdm
 
-from ddpm_base import Ddpm_base
-from distributed import is_main_gpu
+from ddpm.ddpm_base import Ddpm_base
+from utils.distributed import is_main_gpu
+
+logger = logging.getLogger('logddp')
 
 
 class Trainer(Ddpm_base):
@@ -29,7 +32,6 @@ class Trainer(Ddpm_base):
         self.optimizer = optimizer
         self.epochs_run = 0
         self.best_loss = float('inf')
-
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
                                                                  epochs=self.config.scheduler_epoch,
@@ -83,9 +85,10 @@ class Trainer(Ddpm_base):
                 self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
-        if self.config.debug_log:
-            print(
-                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
+        logger.debug(
+            f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader)} | "
+            f"Last loss: {total_loss / len(self.dataloader)} | "
+            f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         return total_loss / len(self.dataloader)
 
@@ -118,12 +121,12 @@ class Trainer(Ddpm_base):
         if self.config.use_wandb:
             snapshot["WANDB_ID"] = wandb.run.id
         torch.save(snapshot, path)
-        print(
-            f"#INFO : Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
+        logger.info(
+            f"Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
 
     def _init_wandb(self):
         """
-        Initialize WandB for logging training progress.
+        Initialize WandB for logger training progress.
         Returns:
             None
         """
@@ -191,8 +194,9 @@ class Trainer(Ddpm_base):
 
         if is_main_gpu():
             wandb.finish()
-            print(
-                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
+            logger.info(
+                f"Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
+                f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
 
     def sample_train(self, ep=None, nb_img=4):
         """
@@ -207,7 +211,7 @@ class Trainer(Ddpm_base):
             Warning(
                 "Sampling more than 6 images may long to compute because sampling use only main GPU.")
 
-        print(f"Sampling {nb_img} images...")
+        logger.info(f"Sampling {nb_img} images...")
         samples = super()._sample_batch(nb_img=nb_img)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
@@ -215,8 +219,8 @@ class Trainer(Ddpm_base):
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
-        print(
-            f"\nSampling done. Images saved in {self.config.run_name}/samples/")
+        logger.info(
+            f"Sampling done. Images saved in {self.config.run_name}/samples/")
 
     def _log(self, epoch, log_dict):
         """

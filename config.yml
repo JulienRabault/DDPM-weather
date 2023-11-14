@@ -1,0 +1,42 @@
+{
+   # General parameters
+  "mode": "Train",
+  "run_name": "my_training_run",
+  "batch_size": 64,
+  "any_time": 300,
+  "model_path": "/path/to/pretrained_model.pth",
+  "debug": true,
+
+  # Sampling parameters
+  "ddim_timesteps": 10,
+  "plot": false,
+  "guided": "/path/to/guided_data",
+  "n_sample": 15,
+  "random_noise": true,
+
+  # Data parameters
+  "data_dir": "/path/to/data",
+  "csv_file": "/path/to/labels.csv",
+  "v_i": 5,
+  "var_indexes": ["u", "v", "t2m", "rh", "p"],
+  "crop": [50, 180, 30, 150],
+  "auto_normalize": true,
+  "invert_norm": false,
+  "image_size": 256,
+  "mean_file": "/path/to/mean_file.npy",
+  "max_file": "/path/to/max_file.npy",
+
+  # Model parameters
+  "scheduler": true,
+  "scheduler_epoch": 200,
+  "resume": false,
+  "lr": 1e-4,
+  "adam_betas": [0.95, 0.999],
+  "epochs": 200,
+  "beta_schedule": "linear",
+
+  # Tracking parameters
+  "wandbproject": "my_project",
+  "use_wandb": true,
+  "entityWDB": "my_entity"
+}

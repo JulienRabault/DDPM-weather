@@ -1,12 +1,15 @@
+import logging
 import os
 
 import numpy as np
 import torch
 from tqdm import tqdm
 
-from ddpm_base import Ddpm_base
-from distributed import is_main_gpu
-from guided_loss import loss_dict
+from ddpm.ddpm_base import Ddpm_base
+from utils.distributed import is_main_gpu
+from utils.guided_loss import loss_dict
+
+logger = logging.getLogger('logddp')
 
 
 class Sampler(Ddpm_base):
@@ -60,7 +63,8 @@ class Sampler(Ddpm_base):
             None
         """
         if is_main_gpu():
-            print(f"Sampling {nb_img * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
+            logger.info(
+                f"Sampling {nb_img * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
 
         i = self.gpu_id if type(self.gpu_id) is int else 0
         b = 0
@@ -68,7 +72,6 @@ class Sampler(Ddpm_base):
                   disable=is_main_gpu()) as pbar:
             while b < nb_img:
                 batch_size = min(nb_img - b, self.config.batch_size)
-                print(f"batch_size: {batch_size}")
                 samples = super()._sample_batch(nb_img=batch_size)
                 for s in samples:
                     filename = filename_format.format(i=str(i))
@@ -79,8 +82,8 @@ class Sampler(Ddpm_base):
                 pbar.update(1)
         if plot:
             self.plot_grid("last_samples.jpg", samples)
-        print(
-            f"\nSampling done. Images saved in {self.config.run_name}/samples/")
+        logger.info(
+            f"Sampling done. Images saved in {self.config.run_name}/samples/")
 
     def guided_sample(self, dataloader, filename_format="F_samble_Diff_{i}.npy", plot=False, random_noise=False):
         """
@@ -94,15 +97,10 @@ class Sampler(Ddpm_base):
             None
         """
         iters = len(dataloader)
-        if is_main_gpu():
-            loop = tqdm(enumerate(dataloader), total=iters,
-                        desc=f"Sampling", unit="batch",
-                        leave=False, postfix="")
-        else:
-            loop = enumerate(dataloader)
         # i = self.gpu_id if type(self.gpu_id) == int else 0
-
-        for _, batch in loop:
+        for _, batch in tqdm(enumerate(dataloader), total=iters,
+                             desc=f"Sampling", unit="batch",
+                             leave=False, postfix="", disable=is_main_gpu()):
             imgs, ids = batch
             if plot:
                 self.plot_grid("batch", self.transforms_func(imgs).numpy())
@@ -115,5 +113,5 @@ class Sampler(Ddpm_base):
                 # i += max(torch.cuda.device_count(), 1)
         if plot:
             self.plot_grid("last_guided_samples.jpg", samples)
-        print(
-            f"\nSampling done. Images saved in {self.config.run_name}/samples/")
+        logger.info(
+            f"Sampling done. Images saved in {self.config.run_name}/samples/")

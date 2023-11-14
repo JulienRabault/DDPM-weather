@@ -1,3 +1,4 @@
+import logging
 import os
 import warnings
 
@@ -6,7 +7,9 @@ import torch.nn as nn
 from matplotlib import pyplot as plt
 from torchvision.transforms import transforms
 
-from distributed import get_rank, is_main_gpu
+from utils.distributed import get_rank, is_main_gpu
+
+logger = logging.getLogger('logddp')
 
 
 class Ddpm_base:
@@ -14,7 +17,7 @@ class Ddpm_base:
             self,
             model: torch.nn.Module,
             config,
-            dataloader=None,) -> None:
+            dataloader=None, ) -> None:
         """
         Initialize the Trainer.
         Args:
@@ -31,7 +34,7 @@ class Ddpm_base:
         self.model = model
         if self.snapshot_path is not None:
             if is_main_gpu():
-                print(f"#INFO : Loading snapshot")
+                logger.info(f"Loading snapshot")
             self._load_snapshot(self.snapshot_path)
         model.to(torch.device(self.gpu_id))
         if self.dataloader is not None:
@@ -80,12 +83,9 @@ class Ddpm_base:
             warnings.warn("The snapshot does not contain data config, assuming it is the same as the current config")
         self.stds = snapshot["STDS"]
         self.means = snapshot["MEANS"]
-        if self.config.debug_log:
-            print(
-                f"\n#LOG : [GPU{self.gpu_id}] Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
-        elif is_main_gpu():
-            print(
-                f"#INFO : Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
+        if is_main_gpu():
+            logger.info(
+                f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
         self.epochs_run += 1
 
     def _sample_batch(self, nb_img=4):

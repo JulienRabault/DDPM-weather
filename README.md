@@ -58,7 +58,7 @@ Vous pouvez personnaliser le comportement de ce code en utilisant les options su
 - batch_size : La taille du lot (par défaut : 32).
 - any_time : Toutes les combien d'époques sauvegarder et générer des échantillons (par défaut : 400).
 - model_path : Le chemin vers le modèle pour charger et reprendre l'entraînement si nécessaire (aucun chemin démarrera l'entraînement depuis le début).
-- debug_log : Active les journaux de débogage (par défaut : désactivé).
+- debug : Active les journaux de débogage (par défaut : désactivé).
 
 #### Paramètres d'échantillonnage :
 
