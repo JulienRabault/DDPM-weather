@@ -17,7 +17,7 @@ class Ddpm_base:
             self,
             model: torch.nn.Module,
             config,
-            dataloader=None, ) -> None:
+            dataloader=None) -> None:
         """
         Initialize the Trainer.
         Args:
@@ -58,6 +58,7 @@ class Ddpm_base:
             self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
             self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.gpu_id],
                                                              output_device=self.gpu_id)
+            self.model = self.model.module
 
     def _load_snapshot(self, snapshot_path):
         """
@@ -88,7 +89,7 @@ class Ddpm_base:
                 f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
         self.epochs_run += 1
 
-    def _sample_batch(self, nb_img=4):
+    def _sample_batch(self, nb_img=4, condition=None):
         """
         Sample a batch of images.
         Args:
@@ -98,8 +99,10 @@ class Ddpm_base:
         """
         if nb_img <= 0:
             return []
-        sampled_images = self.model.module.sample(
-            batch_size=nb_img) if torch.cuda.device_count() >= 2 else self.model.sample(batch_size=nb_img)
+        if condition is None:
+            sampled_images = self.model.sample(batch_size=nb_img)
+        else:
+            sampled_images = self.model.sample(batch_size=nb_img, condition=condition)
         sampled_images = self.transforms_func(sampled_images)
         return sampled_images.cpu().numpy()
 

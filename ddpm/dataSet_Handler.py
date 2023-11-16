@@ -11,6 +11,7 @@ DataSet class from Importance_Sampled images
 
 import os
 import re
+import random
 
 import numpy as np
 import pandas as pd
@@ -29,9 +30,18 @@ class ISDataset(Dataset):
     def __init__(self, config, path, csv_file, add_coords=False):
         self.data_dir = path
         self.labels = pd.read_csv(os.path.join(path, csv_file))
+        self.config = config
+        # self.guide_img = pd.read_csv(os.path.join(path, config.guide_file))
 
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
+        self.ensembles = None
+        if self.config.guiding_col is not None:
+            if "Unnamed: 0" in self.labels:
+                self.labels = self.labels.drop('Unnamed: 0', axis=1)
+            self.ensembles = self.labels.groupby(
+                ['self.config.guiding_col']).agg(lambda x: x)
+            self.ensembles = self.ensembles["Name"]
 
         ## adding 'positional encoding'
         self.add_coords = add_coords
@@ -59,7 +69,6 @@ class ISDataset(Dataset):
         sample = np.float32(np.load(sample_path + '.npy')) \
             [self.VI, self.CI[0]:self.CI[1], self.CI[2]:self.CI[3]]
 
-        ## transpose to get off with transform.Normalize builtin transposition
         sample = sample.transpose((1, 2, 0))
         self.transform = transforms.Compose(
             [
@@ -67,6 +76,12 @@ class ISDataset(Dataset):
                 transforms.Normalize(self.means, self.stds),
             ]
         )
+        ens = None
+        if self.ensembles is None:
+            ensemble_id = self.labels.loc[idx, self.config.guiding_col]
+            ensemble = self.ensembles[ensemble_id].tolist()
+            ensemble.remove(self.labels.iloc[idx, 0])
+            ens = random.sample(ensemble, 1)
         sample = self.transform(sample)
         sample_id = re.search(r'\d+', file_name).group()
-        return sample, sample_id
+        return {'img': sample, 'img_id': sample_id, 'condition': ens}

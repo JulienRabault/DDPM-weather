@@ -53,6 +53,11 @@ class Config:
         with open(CONFIG_SCHEMA_PATH, 'r') as schema_file:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
+        if self.sampling_mode == 'guided' or self.sampling_mode == 'simple_guided':
+            assert self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100, \
+                "Guidance loss scale must be between 0 and 100."
+            if self.guided_path is None:
+                raise ValueError("guided_path must be specified when using guided sampling mode.")
         if self.resume:
             if self.model_path is None or not os.path.isfile(self.model_path):
                 raise FileNotFoundError(
@@ -73,6 +78,16 @@ class Config:
     def to_dict(self):
         return {attr: getattr(self, attr) for attr in dir(self) if
                 not callable(getattr(self, attr)) and not attr.startswith("__")}
+
+    def to_json(self):
+        return json.dumps(self.to_dict())
+
+    def to_yaml(self):
+        return yaml.dump(self.to_dict())
+
+    def save(self, path):
+        with open(path, 'w') as f:
+            yaml.dump(self.to_dict(), f)
 
     @classmethod
     def from_args_and_yaml(cls, args):

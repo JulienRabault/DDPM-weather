@@ -7,6 +7,7 @@ import warnings
 from multiprocessing import cpu_count
 
 import torch
+import yaml
 from denoising_diffusion_pytorch import Unet, GaussianDiffusion
 from torch import distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
@@ -16,6 +17,7 @@ from torch.utils.data.distributed import DistributedSampler
 import logging
 
 from ddpm import dataSet_Handler
+from ddpm.guided_gaussian_diffusion import GuidedGaussianDiffusion
 from ddpm.sampler import Sampler
 from ddpm.trainer import Trainer
 from utils.config import Config
@@ -52,7 +54,7 @@ def setup_logger(config, log_file="ddp.log"):
     return logger
 
 
-def ddp_setup(config):
+def ddp_setup():
     """
     Configuration for Distributed Data Parallel (DDP).
     Args:
@@ -80,9 +82,14 @@ def load_train_objs(config):
     umodel = Unet(
         dim=int(config.image_size / 2),
         dim_mults=(1, 2, 4, 8),
-        channels=len(config.var_indexes)
+        channels=len(config.var_indexes),
+        self_condition=config.guiding_col is not None,
     )
-    model = GaussianDiffusion(
+    if config.guiding_col is not None:
+        cls = GuidedGaussianDiffusion
+    else:
+        cls = GaussianDiffusion
+    model = cls(
         umodel,
         image_size=config.image_size,
         timesteps=1000,
@@ -117,13 +124,6 @@ def prepare_dataloader(config, path, csv_file):
         drop_last=False
     )
 
-def save_config(config):
-    """
-    Save the configuration to a text file.
-    """
-    with open(f"{config.run_name}/config.txt", 'w') as f:
-        f.write(str(config))
-
 
 def main_train(config):
     """
@@ -155,12 +155,12 @@ def main_sample(config):
         config (Namespace): Configuration parameters.
     """
     model, _ = load_train_objs(config)
-    sampler = Sampler(model, config)
-    if config.guided is None:
-        sampler.sample(nb_img=config.n_sample, plot=config.plot)
+    if config.guided_sampling is not None:
+        sample_data = prepare_dataloader(config, path=config.guided_sampling, csv_file=config.csv_file)
     else:
-        train_data = prepare_dataloader(config, path=config.guided, csv_file=config.csv_file)
-        sampler.guided_sample(train_data, plot=config.plot, random_noise=config.random_noise)
+        sample_data = None
+    sampler = Sampler(model, config, dataloader=sample_data)
+    sampler.sample(plot=config.plot, random_noise=config.random_noise)
 
 
 if __name__ == "__main__":
@@ -172,21 +172,18 @@ if __name__ == "__main__":
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
 
-    # Create argparse arguments based on the schema
     Config.create_arguments(parser, schema)
-
-    # Parse the arguments
     args = parser.parse_args()
-
-
-    # Create Config instance by combining YAML and command-line arguments
     config = Config.from_args_and_yaml(args)
 
-    save_config(config)
+    config.save(f"{config.run_name}/config.yml")
 
-    # Additional code from your main
+    if is_main_gpu():
+        with open(f"{config.run_name}/config.yml", 'w') as outfile:
+            yaml.dump(config.to_yaml(), outfile, default_flow_style=False)
+
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <= batch_size'
-    ddp_setup(config)
+    ddp_setup()
     local_rank = get_rank()
 
     if not config.use_wandb:

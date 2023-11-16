@@ -10,15 +10,17 @@
   # Sampling parameters
   "ddim_timesteps": 10,
   "plot": false,
-  "guided": "/path/to/guided_data",
+  "sampling_mode": "simple",
+  "guided_sampling": "/path/to/guided_data",
   "n_sample": 15,
   "random_noise": true,
 
   # Data parameters
-  "data_dir": "/path/to/data",
-  "csv_file": "/path/to/labels.csv",
+  "data_dir": "data/dtaset1",
+  "csv_file": "data/dtaset1/IS_method_labels.csv",
+  "guiding_col": "ensemble_id",
   "v_i": 5,
-  "var_indexes": ["u", "v", "t2m", "rh", "p"],
+  "var_indexes": ["u", "v", "t2m"],
   "crop": [50, 180, 30, 150],
   "auto_normalize": true,
   "invert_norm": false,

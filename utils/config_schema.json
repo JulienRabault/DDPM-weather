@@ -35,10 +35,16 @@
       "type": "boolean",
       "default": false
     },
-    "guided": {
+    "sampling_mode": {
+        "type": "string",
+        "enum": ["simple", "guided", "simple_guided"],
+        "default": "simple",
+        "description": "Sampling mode: Choose between simple, guided or simple_guided"
+    },
+    "guiding_col": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Path to guided data"
+      "description": "Column to use for guided sampling"
     },
     "n_sample": {
       "type": "integer",
@@ -59,6 +65,11 @@
       "type": ["string", "null"],
       "default": null,
       "description": "Path to the csv file containing the labels data"
+    },
+    "guided_sampling": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Path to the guided simple sampling data"
     },
     "v_i": {
       "type": "integer",
