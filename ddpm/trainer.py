@@ -32,6 +32,7 @@ class Trainer(Ddpm_base):
         self.optimizer = optimizer
         self.epochs_run = 0
         self.best_loss = float('inf')
+        self.guided_diffusion = self.config.guiding_col is not None
         if self.config.scheduler:
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=self.config.lr,
                                                                  epochs=self.config.scheduler_epoch,
@@ -43,6 +44,30 @@ class Trainer(Ddpm_base):
                                                                  final_div_factor=1500.0)
         else:
             self.scheduler = None
+    
+    def _prepare_batch(self, batch, key_get, convert_keys={}):
+        """
+        Prepare the batch for training.
+        Args:
+            batch: Input batch for training.
+            key_get: Keys to extract from the batch.
+            convert_keys: Keys to convert to tensors.
+            convert_tensor: Whether to convert the batch to tensors.
+        Returns:
+            dict: The prepared batch.
+        """
+        batch = {key: batch[key] for key in key_get}
+        for key in batch.keys():
+            if key in convert_keys:
+                batch[convert_keys[key]] = batch[key].to(self.gpu_id)
+                del batch[key]
+            else:
+                batch[key] = batch[key].to(self.gpu_id)
+        # check if batch is empty and raise
+        # if len(batch) != len(key_get):
+        #     raise ValueError("Batch is empty")
+        # assert len(batch) == len(key_get)
+        return batch
 
     def _run_batch(self, batch):
         """
@@ -72,9 +97,10 @@ class Trainer(Ddpm_base):
         total_loss = 0
         loop = tqdm(enumerate(self.dataloader), total=iters,
                              desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}", unit="batch",
-                             leave=False, postfix="", disable=is_main_gpu())
+                             leave=False, postfix="", disable=not is_main_gpu())
         for i, batch in loop:
-            batch = batch.to(self.gpu_id)
+            needs_keys = ['img'] + (['condition'] if self.guided_diffusion else [])
+            batch = self._prepare_batch(batch,needs_keys)
             loss = self._run_batch(batch)
             total_loss += loss
             if self.config.scheduler:
@@ -87,7 +113,8 @@ class Trainer(Ddpm_base):
             f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
-            self.sample_train(str(epoch), self.config.n_sample, batch.condition)
+            condition = self._prepare_batch(batch,['condition']if self.guided_diffusion else [])
+            self.sample_train(str(epoch), self.config.n_sample,condition)
 
         return total_loss / len(self.dataloader)
 
@@ -103,12 +130,12 @@ class Trainer(Ddpm_base):
             None
         """
         snapshot = {
-            "MODEL_STATE": self.model.module.state_dict() if dist.is_initialized() else self.model.state_dict(),
+            "MODEL_STATE": self.model.state_dict(),
             "EPOCHS_RUN": epoch,
             'OPTIMIZER_STATE': self.optimizer.state_dict(),
             'BEST_LOSS': loss,
             'TIMESTAMP': self.timesteps,
-            'GUIDED_DIFFUSION': self.config.guided_diffusion,
+            'GUIDED_DIFFUSION': self.guided_diffusion,
             'DATA': {
                 'STDS': self.stds,
                 'MEANS': self.means,
@@ -220,7 +247,8 @@ class Trainer(Ddpm_base):
         Returns:
             None
         """
-        wandb.log(log_dict, step=epoch)
+        if self.config.use_wandb:
+            wandb.log(log_dict, step=epoch)
         csv_filename = os.path.join(
             f"{self.config.run_name}", "logs_train.csv")
         file_exists = Path(csv_filename).is_file()

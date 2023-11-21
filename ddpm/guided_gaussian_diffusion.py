@@ -2,15 +2,16 @@ from random import random
 
 import torch
 from denoising_diffusion_pytorch import GaussianDiffusion
-from denoising_diffusion_pytorch.denoising_diffusion_pytorch import default
+from denoising_diffusion_pytorch.denoising_diffusion_pytorch import default, extract
 from einops import reduce, rearrange
-from numpy import extract
 from torch.nn.functional import mse_loss
 from tqdm import tqdm
 
-
 class GuidedGaussianDiffusion(GaussianDiffusion):
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        
     # overwrite sample method for add batch guide image
     @torch.no_grad()
     def sample(self, batch_size, return_all_timesteps=False, condition=None):
@@ -78,6 +79,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
 
         x = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_self_cond = condition
+        
         model_out = self.model(x, t, x_self_cond)
 
         if self.objective == 'pred_noise':

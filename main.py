@@ -29,29 +29,32 @@ gc.collect()
 torch.cuda.empty_cache()
 
 
-def setup_logger(config, log_file="ddp.log"):
+def setup_logger(config, log_file="ddpm.log"):
     """
-    Set up a logger with a specified log file.
+    Set up a logger with specified console and file handlers.
     Args:
         config: The configuration object.
         log_file (str): The name of the log file.
     Returns:
         logging.Logger: The configured logger.
     """
-    logger = logging.getLogger('logddp')
-    logger.setLevel(logging.DEBUG if config.debug else logging.INFO)
-    file_handler = logging.FileHandler(os.path.join(config.run_name, log_file))
-    file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
-    ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG if config.debug else logging.INFO)
-    format = f'[GPU {get_rank_num()}] %(asctime)s - %(levelname)s - %(message)s' if torch.cuda.device_count() > 1 \
+
+    del logging.getLogger().handlers[:]
+    # logger = logging.getLogger('logddp')
+
+    # If the logger is not already configured, configure it
+    console_format = f'[GPU {get_rank_num()}] %(asctime)s - %(levelname)s - %(message)s' if torch.cuda.device_count() > 1 \
         else '%(asctime)s - %(levelname)s - %(message)s'
-    formatter = logging.Formatter(format)
+    logging.basicConfig(level=logging.DEBUG, format=console_format)
+    logger = logging.getLogger()
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setLevel(logging.DEBUG)
+    
+    formatter = logging.Formatter(console_format)
+    
     file_handler.setFormatter(formatter)
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
     logger.addHandler(file_handler)
-    return logger
+
 
 
 def ddp_setup():
@@ -155,12 +158,13 @@ def main_sample(config):
         config (Namespace): Configuration parameters.
     """
     model, _ = load_train_objs(config)
-    if config.guided_sampling is not None:
-        sample_data = prepare_dataloader(config, path=config.guided_sampling, csv_file=config.csv_file)
+    if config.data_dir is not None:
+        sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
     else:
         sample_data = None
     sampler = Sampler(model, config, dataloader=sample_data)
     sampler.sample(plot=config.plot, random_noise=config.random_noise)
+
 
 
 if __name__ == "__main__":
@@ -171,19 +175,15 @@ if __name__ == "__main__":
     # Load the schema from a file
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
+ 
+    ddp_setup()
 
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
 
-    config.save(f"{config.run_name}/config.yml")
-
-    if is_main_gpu():
-        with open(f"{config.run_name}/config.yml", 'w') as outfile:
-            yaml.dump(config.to_yaml(), outfile, default_flow_style=False)
-
+    setup_logger(config)
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <= batch_size'
-    ddp_setup()
     local_rank = get_rank()
 
     if not config.use_wandb:
@@ -192,10 +192,14 @@ if __name__ == "__main__":
         os.environ['WANDB_MODE'] = 'offline'
         os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
         os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
+    # setup_logger(config)
+    # logger = logging.getLogger('logddp')
 
-    logger = setup_logger(config)
+
+    logger = logging.getLogger()
 
     if is_main_gpu():
+        config.save(f"{config.run_name}/config.yml")
         logger.info(config)
         logger.info(f'Mode {config.mode} selected')
 

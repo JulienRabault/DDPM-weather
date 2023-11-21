@@ -9,7 +9,7 @@ from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
 
-logger = logging.getLogger('logddp')
+logger = logging.getLogger()
 
 
 class Sampler(Ddpm_base):

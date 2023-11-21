@@ -30,9 +30,9 @@ TYPE_MAPPER = {
 class Config:
     def __init__(self, args):
         yaml_config = load_yaml(args.yaml_path)
+        self._update_from_args(args)
         for prop, value in yaml_config.items():
             setattr(self, prop, value)
-        self._update_from_args(args)
         self._validate_config()
 
     def __str__(self):
@@ -56,8 +56,8 @@ class Config:
         if self.sampling_mode == 'guided' or self.sampling_mode == 'simple_guided':
             assert self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100, \
                 "Guidance loss scale must be between 0 and 100."
-            if self.guided_path is None:
-                raise ValueError("guided_path must be specified when using guided sampling mode.")
+            if self.data_dir is None:
+                raise ValueError("data_dir must be specified when using guided sampling mode.")
         if self.resume:
             if self.model_path is None or not os.path.isfile(self.model_path):
                 raise FileNotFoundError(
@@ -86,7 +86,7 @@ class Config:
         return yaml.dump(self.to_dict())
 
     def save(self, path):
-        with open(path, 'w') as f:
+        with open(path, 'w+') as f:
             yaml.dump(self.to_dict(), f)
 
     @classmethod

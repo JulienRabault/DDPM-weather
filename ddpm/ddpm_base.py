@@ -5,10 +5,12 @@ import warnings
 import torch
 import torch.nn as nn
 from matplotlib import pyplot as plt
+import matplotlib
 from torchvision.transforms import transforms
 
 from utils.distributed import get_rank, is_main_gpu
 
+matplotlib.use("Agg")
 logger = logging.getLogger('logddp')
 
 
@@ -82,8 +84,8 @@ class Ddpm_base:
                 raise ValueError("The variable indexes or crop of the snapshot do not match the current config")
         except KeyError:
             warnings.warn("The snapshot does not contain data config, assuming it is the same as the current config")
-        self.stds = snapshot["STDS"]
-        self.means = snapshot["MEANS"]
+        self.stds = data_config["STDS"]
+        self.means = data_config["MEANS"]
         if is_main_gpu():
             logger.info(
                 f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
