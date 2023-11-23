@@ -8,13 +8,13 @@ from matplotlib import pyplot as plt
 import matplotlib
 from torchvision.transforms import transforms
 
-from utils.distributed import get_rank, is_main_gpu
-
-matplotlib.use("Agg")
-logger = logging.getLogger('logddp')
+from utils.distributed import get_rank, is_main_gpu, get_rank_num
+# logging.getLogger('matplotlib').setLevel(logging.WARNING)
+# matplotlib.use("Agg")
 
 
 class Ddpm_base:
+
     def __init__(
             self,
             model: torch.nn.Module,
@@ -34,9 +34,10 @@ class Ddpm_base:
         self.dataloader = dataloader
         self.snapshot_path = self.config.model_path
         self.model = model
+        self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
         if self.snapshot_path is not None:
             if is_main_gpu():
-                logger.info(f"Loading snapshot")
+                self.logger.info(f"Loading snapshot")
             self._load_snapshot(self.snapshot_path)
         model.to(torch.device(self.gpu_id))
         if self.dataloader is not None:
@@ -87,7 +88,7 @@ class Ddpm_base:
         self.stds = data_config["STDS"]
         self.means = data_config["MEANS"]
         if is_main_gpu():
-            logger.info(
+            self.logger.info(
                 f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
         self.epochs_run += 1
 

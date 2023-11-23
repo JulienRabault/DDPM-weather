@@ -11,10 +11,7 @@ from torch import distributed as dist
 from tqdm import tqdm
 
 from ddpm.ddpm_base import Ddpm_base
-from utils.distributed import is_main_gpu
-
-logger = logging.getLogger('logddp')
-
+from utils.distributed import is_main_gpu, get_rank_num
 
 class Trainer(Ddpm_base):
 
@@ -100,20 +97,23 @@ class Trainer(Ddpm_base):
                              leave=False, postfix="", disable=not is_main_gpu())
         for i, batch in loop:
             needs_keys = ['img'] + (['condition'] if self.guided_diffusion else [])
-            batch = self._prepare_batch(batch,needs_keys)
-            loss = self._run_batch(batch)
+            batch_prep = self._prepare_batch(batch,needs_keys)
+            loss = self._run_batch(batch_prep)
             total_loss += loss
             if self.config.scheduler:
                 self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
-        logger.debug(
-            f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader)} | "
+        self.logger.debug(
+            f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
             f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
-            condition = self._prepare_batch(batch,['condition']if self.guided_diffusion else [])
+            condition = None
+            if self.guided_diffusion:
+                condition = self._prepare_batch(batch,['condition'])
+                condition = condition['condition'][:self.config.n_sample]
             self.sample_train(str(epoch), self.config.n_sample,condition)
 
         return total_loss / len(self.dataloader)
@@ -145,23 +145,24 @@ class Trainer(Ddpm_base):
         }
         if self.config.scheduler:
             snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
-        if self.config.use_wandb:
-            snapshot["WANDB_ID"] = wandb.run.id
+        # if self.config.use_wandb:
+        #     snapshot["WANDB_ID"] = wandb.run.id
         torch.save(snapshot, path)
-        logger.info(
+        self.logger.info(
             f"Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
 
     def _init_wandb(self):
         """
-        Initialize WandB for logger training progress.
+        Initialize WandB for self.logger training progress.
         Returns:
             None
         """
-        if self.gpu_id != 0:
+        if not is_main_gpu():
             return
 
         t = time.strftime("%d-%m-%y_%H-%M", time.localtime(time.time()))
-        wandb.init(project=self.config.wp, resume="auto" if self.config.resume else None, mode=os.environ['WANDB_MODE'],
+        self.logger.debug("WANDB initialized")
+        wandb.init(project=self.config.wandbproject, resume="auto" if self.config.resume else None, mode=os.environ['WANDB_MODE'],
                    entity=self.config.entityWDB,
                    name=f"{self.config.run_name}_{t}/",
                    config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
@@ -207,7 +208,7 @@ class Trainer(Ddpm_base):
 
         if is_main_gpu():
             wandb.finish()
-            logger.info(
+            self.logger.info(
                 f"Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
                 f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
 
@@ -221,13 +222,13 @@ class Trainer(Ddpm_base):
         Returns:
             None
         """
-        if self.gpu_id != 0:
+        if not is_main_gpu():
             return
         if nb_img > 6:
             Warning(
                 "Sampling more than 6 images may long to compute because sampling use only main GPU.")
 
-        logger.info(f"Sampling {nb_img} images...")
+        self.logger.info(f"Sampling {nb_img} images...")
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
@@ -235,7 +236,7 @@ class Trainer(Ddpm_base):
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
-        logger.info(
+        self.logger.info(
             f"Sampling done. Images saved in {self.config.run_name}/samples/")
 
     def _log(self, epoch, log_dict):
@@ -247,6 +248,8 @@ class Trainer(Ddpm_base):
         Returns:
             None
         """
+        if not is_main_gpu():
+            return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
         csv_filename = os.path.join(

@@ -15,13 +15,14 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import logging
+import sys
 
 from ddpm import dataSet_Handler
 from ddpm.guided_gaussian_diffusion import GuidedGaussianDiffusion
 from ddpm.sampler import Sampler
 from ddpm.trainer import Trainer
 from utils.config import Config
-from utils.distributed import get_rank_num, get_rank, is_main_gpu
+from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
 
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
@@ -31,30 +32,36 @@ torch.cuda.empty_cache()
 
 def setup_logger(config, log_file="ddpm.log"):
     """
-    Set up a logger with specified console and file handlers.
+    Configure a logger with specified console and file handlers.
     Args:
         config: The configuration object.
         log_file (str): The name of the log file.
     Returns:
         logging.Logger: The configured logger.
     """
-
-    del logging.getLogger().handlers[:]
-    # logger = logging.getLogger('logddp')
-
-    # If the logger is not already configured, configure it
     console_format = f'[GPU {get_rank_num()}] %(asctime)s - %(levelname)s - %(message)s' if torch.cuda.device_count() > 1 \
         else '%(asctime)s - %(levelname)s - %(message)s'
-    logging.basicConfig(level=logging.DEBUG, format=console_format)
-    logger = logging.getLogger()
-    file_handler = logging.FileHandler(log_file)
-    file_handler.setLevel(logging.DEBUG)
-    
-    formatter = logging.Formatter(console_format)
-    
-    file_handler.setFormatter(formatter)
+
+    logger = logging.getLogger(f'logddp_{get_rank_num()}')
+    logger.setLevel(logging.DEBUG if config.debug else logging.INFO)
+    logger.propagate = False  # Prevent double printing
+
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
+    console_formatter = logging.Formatter(console_format)
+    console_handler.setFormatter(console_formatter)
+
+    file_handler = logging.FileHandler(os.path.join(config.run_name, log_file), mode='w+')
+    file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
+    file_formatter = logging.Formatter(console_format)
+    file_handler.setFormatter(file_formatter)
+
+    logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
+    logging.getLogger('wandb').setLevel(logging.WARNING)
+
+    return logger
 
 
 def ddp_setup():
@@ -68,8 +75,6 @@ def ddp_setup():
     init_process_group(
         'nccl' if dist.is_nccl_available() else 'gloo',
         world_size=torch.cuda.device_count())
-    logging.debug(
-        f"init_process_group(backend={'nccl' if dist.is_nccl_available() else 'gloo'})")
     torch.cuda.set_device(get_rank())
 
 
@@ -83,7 +88,7 @@ def load_train_objs(config):
     """
 
     umodel = Unet(
-        dim=int(config.image_size / 2),
+        dim=64,
         dim_mults=(1, 2, 4, 8),
         channels=len(config.var_indexes),
         self_condition=config.guiding_col is not None,
@@ -148,7 +153,7 @@ def main_train(config):
         config.model_path = f"{config.run_name}/best.pt"
         model, _ = load_train_objs(config)
         sampler = Sampler(model, config)
-        sampler.sample(filename_format="sample_best_{i}.npy", nb_img=config.n_sample, plot=config.plot)
+        sampler.sample(filename_format="sample_best_{i}.npy")
 
 
 def main_sample(config):
@@ -158,12 +163,12 @@ def main_sample(config):
         config (Namespace): Configuration parameters.
     """
     model, _ = load_train_objs(config)
-    if config.data_dir is not None:
+    if config.sampling_mode != "simple":
         sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
     else:
         sample_data = None
     sampler = Sampler(model, config, dataloader=sample_data)
-    sampler.sample(plot=config.plot, random_noise=config.random_noise)
+    sampler.sample()
 
 
 
@@ -182,7 +187,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
 
-    setup_logger(config)
+    # setup_logger(config)
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <= batch_size'
     local_rank = get_rank()
 
@@ -192,18 +197,17 @@ if __name__ == "__main__":
         os.environ['WANDB_MODE'] = 'offline'
         os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
         os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
-    # setup_logger(config)
-    # logger = logging.getLogger('logddp')
-
-
-    logger = logging.getLogger()
+    synchronize()
+    setup_logger(config)
+    logger = logging.getLogger(f'logddp_{get_rank_num()}')
 
     if is_main_gpu():
         config.save(f"{config.run_name}/config.yml")
         logger.info(config)
         logger.info(f'Mode {config.mode} selected')
 
-    logger.debug(f"local_rank: {local_rank}")
+    synchronize()
+    logger.debug(f"Local_rank: {local_rank}")
 
     if config.mode == 'Train':
         main_train(config)

@@ -3,8 +3,8 @@ import os
 
 import jsonschema as jsonschema
 import yaml
-
-from utils.distributed import is_main_gpu
+import logging
+from utils.distributed import is_main_gpu, get_rank_num
 
 CONFIG_SCHEMA_PATH = "utils/config_schema.json"
 
@@ -33,7 +33,8 @@ class Config:
         self._update_from_args(args)
         for prop, value in yaml_config.items():
             setattr(self, prop, value)
-        self._validate_config()
+        self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
+        self._validate_config()  
 
     def __str__(self):
         """
@@ -58,12 +59,17 @@ class Config:
                 "Guidance loss scale must be between 0 and 100."
             if self.data_dir is None:
                 raise ValueError("data_dir must be specified when using guided sampling mode.")
+            if self.sampling_mode == 'guided' and self.guiding_col is None:
+                raise ValueError("guiding_col must be specified when using guided sampling mode.")
         if self.resume:
             if self.model_path is None or not os.path.isfile(self.model_path):
                 raise FileNotFoundError(
                     f"self.resume={self.resume} but snapshot_path={self.model_path} is None or doesn't exist")
             if self.mode != 'Train':
-                raise ValueError("--r flag can only be used in Train mode.")
+                raise ValueError("--r flag can only be used in Train mode.")      
+        if self.any_time > self.epochs:
+            if is_main_gpu():
+                self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
         paths = [
             f"{self.run_name}/",
             f"{self.run_name}/samples/",

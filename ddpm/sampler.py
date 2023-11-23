@@ -6,13 +6,13 @@ import torch
 from tqdm import tqdm
 
 from ddpm.ddpm_base import Ddpm_base
-from utils.distributed import is_main_gpu
+from utils.distributed import is_main_gpu, get_rank_num
 from utils.guided_loss import loss_dict
-
-logger = logging.getLogger()
 
 
 class Sampler(Ddpm_base):
+
+    
     def __init__(self, model: torch.nn.Module, config, dataloader=None) -> None:
         """
         Initialize the Sampler class.
@@ -54,8 +54,7 @@ class Sampler(Ddpm_base):
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
         return sampled_images_unnorm
 
-    def sample(self, filename_format="_sample_{i}.npy", nb_img=4, plot=False, sampling_mode="simple",
-               random_noise=False):
+    def sample(self, filename_format="_sample_{i}.npy"):
         """
         Generate and save sample images during training.
         Args:
@@ -68,25 +67,27 @@ class Sampler(Ddpm_base):
             None
         """
         if is_main_gpu():
-            logger.info(
-                f"Sampling {nb_img * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
+            self.logger.info(
+                f"Sampling {self.config.n_sample * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
 
         i = self.gpu_id if type(self.gpu_id) is int else 0
-        if sampling_mode != "simple":
+        if self.config.sampling_mode != "simple":
             dataloader_iter = iter(self.dataloader)
         b = 0
-        with tqdm(total=nb_img // self.config.batch_size, desc="Sampling ", unit="batch",
+        with tqdm(total=self.config.n_sample // self.config.batch_size, desc="Sampling ", unit="batch",
                   disable=is_main_gpu()) as pbar:
-            while b < nb_img:
-                batch_size = min(nb_img - b, self.config.batch_size)
-                if sampling_mode == "simple":
+            while b < self.config.n_sample:
+                batch_size = min(self.config.n_sample - b, self.config.batch_size)
+                if self.config.sampling_mode == "simple":
                     samples = super()._sample_batch(nb_img=batch_size)
-                elif sampling_mode == "guided":
-                    samples = self._sample_batch(nb_img=batch_size, condition=next(dataloader_iter)['img'])
-                elif sampling_mode == "simple_guided":
-                    samples = self._simple_guided_sample_batch(next(dataloader_iter)['img'], random_noise=random_noise)
+                elif self.config.sampling_mode == "guided":
+                    cond = next(dataloader_iter)['img'][:batch_size].to(self.gpu_id)
+                    samples = self._sample_batch(nb_img=batch_size, condition=cond)
+                elif self.config.sampling_mode == "simple_guided":
+                    cond = next(dataloader_iter)['img'][:batch_size].to(self.gpu_id)
+                    samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
                 else:
-                    raise ValueError(f"Sampling mode {sampling_mode} not supported.")
+                    raise ValueError(f"Sampling mode {self.config.sampling_mode} not supported.")
                 for s in samples:
                     filename = filename_format.format(i=str(i))
                     save_path = os.path.join(self.config.run_name, "samples", filename)
@@ -95,8 +96,8 @@ class Sampler(Ddpm_base):
                 b += batch_size
                 pbar.update(1)
 
-        if plot:
+        if self.config.plot:
             self.plot_grid("last_samples.jpg", samples)
 
-        logger.info(
+        self.logger.info(
             f"Sampling done. Images saved in {self.config.run_name}/samples/")
