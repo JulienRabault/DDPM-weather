@@ -1,9 +1,9 @@
 {
    # General parameters
   "mode": "Train",
-  "run_name": "run256",
+  "run_name": "run_256_guided",
   "batch_size": 4,
-  "any_time": 1,
+  "any_time": 25,
 
   # Sampling parameters
   "ddim_timesteps": 500,
@@ -22,13 +22,13 @@
   "image_size": 256,
   "mean_file": "mean_with_orog.npy",
   "max_file": "max_with_orog.npy",
-  # "guiding_col": "ensemble_id",
+  "guiding_col": "ensemble_id",
 
   # Model parameters
   "scheduler": true,
-  "scheduler_epoch": 10,
+  "scheduler_epoch": 500,
   "resume": false,
-  "epochs": 10,
+  "epochs": 500,
   "beta_schedule": "linear",
 
   # Tracking parameters

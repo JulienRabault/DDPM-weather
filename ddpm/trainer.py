@@ -95,7 +95,15 @@ class Trainer(Ddpm_base):
         loop = tqdm(enumerate(self.dataloader), total=iters,
                              desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}", unit="batch",
                              leave=False, postfix="", disable=not is_main_gpu())
+        # prof = torch.profiler.profile(
+        # schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=1),
+        # on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/resnet18'),
+        # record_shapes=True,
+        # with_stack=True)
+        # prof.start()
         for i, batch in loop:
+
+            # prof.step()
             needs_keys = ['img'] + (['condition'] if self.guided_diffusion else [])
             batch_prep = self._prepare_batch(batch,needs_keys)
             loss = self._run_batch(batch_prep)
@@ -110,11 +118,12 @@ class Trainer(Ddpm_base):
             f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
-            condition = None
             if self.guided_diffusion:
-                condition = self._prepare_batch(batch,['condition'])
+                condition = self._prepare_batch(next(iter(self.dataloader)),['condition'])
                 condition = condition['condition'][:self.config.n_sample]
-            self.sample_train(str(epoch), self.config.n_sample,condition)
+            self.sample_train(str(epoch), self.config.n_sample, condition)
+        # if i == 200:
+        #     prof.stop()
 
         return total_loss / len(self.dataloader)
 

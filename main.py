@@ -28,6 +28,7 @@ warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
 gc.collect()
 torch.cuda.empty_cache()
+# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
 def setup_logger(config, log_file="ddpm.log"):

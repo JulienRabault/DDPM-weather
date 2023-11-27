@@ -56,6 +56,7 @@ class Ddpm_base:
                 return x
 
             self.transforms_func = transforms_func
+        # self.model = torch.compile(self.model)
 
         if torch.cuda.device_count() >= 2:
             self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)

@@ -70,6 +70,11 @@ class Config:
         if self.any_time > self.epochs:
             if is_main_gpu():
                 self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
+        if self.n_sample > self.batch_size and self.guiding_col is not None:
+            self.n_sample = self.batch_size
+            if is_main_gpu():
+                self.logger.warning(f"n_sample={self.n_sample} is greater than batch_size={self.batch_size}. "
+                                    f"Setting n_sample={self.n_sample} to batch_size={self.batch_size}.")
         paths = [
             f"{self.run_name}/",
             f"{self.run_name}/samples/",
