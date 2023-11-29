@@ -1,9 +1,10 @@
 import json
+import logging
 import os
 
 import jsonschema as jsonschema
 import yaml
-import logging
+
 from utils.distributed import is_main_gpu, get_rank_num
 
 CONFIG_SCHEMA_PATH = "utils/config_schema.json"
@@ -26,20 +27,18 @@ TYPE_MAPPER = {
     "float": float
 }
 
-
 class Config:
     def __init__(self, args):
+        # Load YAML configuration file and initialize logger
         yaml_config = load_yaml(args.yaml_path)
         self._update_from_args(args)
         for prop, value in yaml_config.items():
             setattr(self, prop, value)
         self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
-        self._validate_config()  
+        self._validate_config()
 
     def __str__(self):
-        """
-        Return a string representation of the configuration.
-        """
+        # Return a string representation of the configuration
         config_string = "Configuration:"
         for attr, value in self.to_dict().items():
             config_string += f"\n\t{attr}: {value}"
@@ -47,13 +46,16 @@ class Config:
         return config_string
 
     def _update_from_args(self, args):
+        # Update configuration attributes from command line arguments
         for prop, value in args.__dict__.items():
             setattr(self, prop, value)
 
     def _validate_config(self):
+        # Validate the configuration against a JSON schema
         with open(CONFIG_SCHEMA_PATH, 'r') as schema_file:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
+        # Check specific conditions for certain configuration values
         if self.sampling_mode == 'guided' or self.sampling_mode == 'simple_guided':
             assert self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100, \
                 "Guidance loss scale must be between 0 and 100."
@@ -66,7 +68,7 @@ class Config:
                 raise FileNotFoundError(
                     f"self.resume={self.resume} but snapshot_path={self.model_path} is None or doesn't exist")
             if self.mode != 'Train':
-                raise ValueError("--r flag can only be used in Train mode.")      
+                raise ValueError("--r flag can only be used in Train mode.")
         if self.any_time > self.epochs:
             if is_main_gpu():
                 self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
@@ -75,6 +77,7 @@ class Config:
             if is_main_gpu():
                 self.logger.warning(f"n_sample={self.n_sample} is greater than batch_size={self.batch_size}. "
                                     f"Setting n_sample={self.n_sample} to batch_size={self.batch_size}.")
+        # Check and create directories based on the configuration
         paths = [
             f"{self.run_name}/",
             f"{self.run_name}/samples/",
@@ -82,26 +85,30 @@ class Config:
         if self.mode == 'Train':
             paths.append(f"{self.run_name}/WANDB/")
             paths.append(f"{self.run_name}/WANDB/cache")
-        # Check paths if resuming, else create them
         if is_main_gpu():
             self._next_run_dir(paths)
 
     def to_dict(self):
+        # Convert configuration to a dictionary
         return {attr: getattr(self, attr) for attr in dir(self) if
                 not callable(getattr(self, attr)) and not attr.startswith("__")}
 
     def to_json(self):
+        # Convert configuration to a JSON string
         return json.dumps(self.to_dict())
 
     def to_yaml(self):
+        # Convert configuration to a YAML string
         return yaml.dump(self.to_dict())
 
     def save(self, path):
+        # Save configuration to a YAML file
         with open(path, 'w+') as f:
             yaml.dump(self.to_dict(), f)
 
     @classmethod
     def from_args_and_yaml(cls, args):
+        # Create a Config object from command line arguments and a YAML file
         config = cls(args)
         return config
 
@@ -139,6 +146,7 @@ class Config:
                 )
 
     def _next_run_dir(self, paths):
+        # Create directories for the next run
         if self.resume:
             for path in paths:
                 if not os.path.exists(path):

@@ -1,21 +1,19 @@
 import argparse
 import gc
 import json
+import logging
 import os
+import sys
 import time
 import warnings
 from multiprocessing import cpu_count
 
 import torch
-import yaml
 from denoising_diffusion_pytorch import Unet, GaussianDiffusion
 from torch import distributed as dist
 from torch.distributed import init_process_group, destroy_process_group
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-
-import logging
-import sys
 
 from ddpm import dataSet_Handler
 from ddpm.guided_gaussian_diffusion import GuidedGaussianDiffusion
@@ -28,7 +26,6 @@ warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
 gc.collect()
 torch.cuda.empty_cache()
-# os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
 def setup_logger(config, log_file="ddpm.log"):
@@ -40,6 +37,7 @@ def setup_logger(config, log_file="ddpm.log"):
     Returns:
         logging.Logger: The configured logger.
     """
+    # Use a logger specific to the GPU rank
     console_format = f'[GPU {get_rank_num()}] %(asctime)s - %(levelname)s - %(message)s' if torch.cuda.device_count() > 1 \
         else '%(asctime)s - %(levelname)s - %(message)s'
 
@@ -47,16 +45,19 @@ def setup_logger(config, log_file="ddpm.log"):
     logger.setLevel(logging.DEBUG if config.debug else logging.INFO)
     logger.propagate = False  # Prevent double printing
 
+    # Console handler for printing log messages to the console
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     console_formatter = logging.Formatter(console_format)
     console_handler.setFormatter(console_formatter)
 
+    # File handler for saving log messages to a file
     file_handler = logging.FileHandler(os.path.join(config.run_name, log_file), mode='w+')
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
     file_handler.setFormatter(file_formatter)
 
+    # Add both handlers to the logger
     logger.addHandler(console_handler)
     logger.addHandler(file_handler)
 
@@ -68,11 +69,10 @@ def setup_logger(config, log_file="ddpm.log"):
 def ddp_setup():
     """
     Configuration for Distributed Data Parallel (DDP).
-    Args:
-        config (Namespace): Configuration parameters.
     """
     if torch.cuda.device_count() < 2:
         return
+    # Initialize the process group for DDP
     init_process_group(
         'nccl' if dist.is_nccl_available() else 'gloo',
         world_size=torch.cuda.device_count())
@@ -87,7 +87,7 @@ def load_train_objs(config):
     Returns:
         tuple: model, optimizer.
     """
-
+    # Create a U-Net model and a diffusion model based on configuration
     umodel = Unet(
         dim=64,
         dim_mults=(1, 2, 4, 8),
@@ -116,10 +116,10 @@ def prepare_dataloader(config, path, csv_file):
     Prepare the data loader.
     Args:
         config (Namespace): Configuration parameters.
-
     Returns:
         DataLoader: Data loader.
     """
+    # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
     train_set = dataSet_Handler.ISDataset(config, path, csv_file)
 
     return DataLoader(
@@ -128,7 +128,7 @@ def prepare_dataloader(config, path, csv_file):
         pin_memory=True,
         shuffle=not torch.cuda.device_count() >= 2,
         num_workers=cpu_count(),
-        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=True,
+        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
                                    drop_last=False) if torch.cuda.device_count() >= 2 else None,
         drop_last=False
     )
@@ -140,21 +140,21 @@ def main_train(config):
     Args:
         config (Namespace): Configuration parameters.
     """
+    # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file, )
+    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
     start = time.time()
-    trainer = Trainer(model, config, dataloader=train_data,
-                      optimizer=optimizer)
+    trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train()
     end = time.time()
     total_time = end - start
     logging.debug(f"Training execution time: {total_time} seconds")
-    if is_main_gpu():
-        # Sample best model
-        config.model_path = f"{config.run_name}/best.pt"
-        model, _ = load_train_objs(config)
-        sampler = Sampler(model, config)
-        sampler.sample(filename_format="sample_best_{i}.npy")
+    # Sample the best model
+    sample_data = None if config.guiding_col is None else train_data
+    config.model_path = f"{config.run_name}/best.pt"
+    model, _ = load_train_objs(config)
+    sampler = Sampler(model, config, dataloader=sample_data)
+    sampler.sample(filename_format="sample_best_{i}.npy")
 
 
 def main_sample(config):
@@ -163,6 +163,7 @@ def main_sample(config):
     Args:
         config (Namespace): Configuration parameters.
     """
+    # Load the model and start the sampling process
     model, _ = load_train_objs(config)
     if config.sampling_mode != "simple":
         sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
@@ -172,26 +173,24 @@ def main_sample(config):
     sampler.sample()
 
 
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Script d\'entraînement et de test de Deep Learning')
-    parser.add_argument('--yaml_path', type=str, default='config.yml', help='Path to YAML configuration file')
+    # Parse command line arguments and load configuration
+    parser = argparse.ArgumentParser(description='Deep Learning Training and Testing Script')
+    parser.add_argument('--yaml_path', type=str, default='config_train.yml', help='Path to YAML configuration file')
     parser.add_argument('--debug', action='store_true', help='Debug logging')
 
-    # Load the schema from a file
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
- 
+
     ddp_setup()
 
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
 
-    # setup_logger(config)
-    # assert config.n_sample <= config.batch_size, 'can only work with n_sample <= batch_size'
     local_rank = get_rank()
 
+    # Configure logging and synchronize processes
     if not config.use_wandb:
         os.environ['WANDB_MODE'] = 'disabled'
     else:
@@ -203,17 +202,19 @@ if __name__ == "__main__":
     logger = logging.getLogger(f'logddp_{get_rank_num()}')
 
     if is_main_gpu():
-        config.save(f"{config.run_name}/config.yml")
+        config.save(f"{config.run_name}/config_train.yml")
         logger.info(config)
         logger.info(f'Mode {config.mode} selected')
 
     synchronize()
     logger.debug(f"Local_rank: {local_rank}")
 
+    # Execute the main training or sampling function based on the mode
     if config.mode == 'Train':
         main_train(config)
     elif config.mode != 'Train':
         main_sample(config)
 
+    # Clean up distributed processes if initialized
     if dist.is_initialized():
         destroy_process_group()

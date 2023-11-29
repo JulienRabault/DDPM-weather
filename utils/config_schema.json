@@ -14,42 +14,43 @@
     "batch_size": {
       "type": "integer",
       "default": 32,
-      "description": "Batch size"
+      "description": "Batch size for training or sampling"
     },
     "any_time": {
       "type": "integer",
       "default": 400,
-      "description": "Every how many epochs to save and sample"
+      "description": "Frequency (in epochs) to save snapshots and generate samples during training"
     },
     "model_path": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Path to the model for loading and resuming training if necessary (no path will start training from scratch)"
+      "description": "Path to the model for loading and resuming training. If null, training starts from scratch."
     },
     "ddim_timesteps": {
       "type": ["integer", "null"],
       "default": null,
-      "description": "If not None, will sample from the ddim method with the specified number of timesteps"
+      "description": "If not None, samples from the ddim method with the specified number of timesteps"
     },
     "plot": {
       "type": "boolean",
-      "default": false
+      "default": false,
+      "description": "Enable/disable plotting during training"
     },
     "sampling_mode": {
         "type": "string",
         "enum": ["simple", "guided", "simple_guided"],
         "default": "simple",
-        "description": "Sampling mode: Choose between simple, guided or simple_guided"
+      "description": "Sampling mode: Choose between simple, guided, or simple_guided"
     },
     "guiding_col": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Column to use for guided sampling"
+      "description": "Column to use for guided sampling. Required when using guided sampling mode."
     },
     "n_sample": {
       "type": "integer",
       "default": 10,
-      "description": "Number of samples to generate"
+      "description": "Number of samples to generate during training"
     },
     "random_noise": {
       "type": "boolean",
@@ -59,12 +60,12 @@
     "data_dir": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Directory containing the data"
+      "description": "Directory containing the input data"
     },
     "csv_file": {
       "type": ["string", "null"],
       "default": null,
-      "description": "Path to the csv file containing the labels data"
+      "description": "Path to the CSV file containing label data (required for guided sampling)"
     },
     "v_i": {
       "type": "integer",
@@ -74,57 +75,57 @@
     "var_indexes": {
       "type": "array",
       "default": ["u", "v", "t2m"],
-      "description": "List of variable indices"
+      "description": "List of variable indices for input data"
     },
     "crop": {
       "type": "array",
       "default": [78, 206, 55, 183],
-      "description": "Crop parameters for images"
+      "description": "Crop parameters for input images [left, right, top, bottom]"
     },
     "auto_normalize": {
       "type": "boolean",
       "default": false,
-      "description": "Automatically normalize"
+      "description": "Automatically normalize input images"
     },
     "invert_norm": {
       "type": "boolean",
       "default": false,
-      "description": "Invert normalization of image samples"
+      "description": "Invert normalization of input image samples"
     },
     "image_size": {
       "type": "integer",
       "default": 128,
-      "description": "Size of the image"
+      "description": "Size of the input image"
     },
     "mean_file": {
       "type": "string",
-      "default": "mean_with_orog.npy",
-      "description": "Mean file path"
+      "default": "mean_file.npy",
+      "description": "Path to the file containing mean values for normalization"
     },
     "max_file": {
       "type": "string",
-      "default": "max_with_orog.npy",
-      "description": "Max file path"
+      "default": "max_file.npy",
+      "description": "Path to the file containing maximum values for normalization"
     },
     "scheduler": {
       "type": "boolean",
       "default": false,
-      "description": "Use scheduler for learning rate"
+      "description": "Use scheduler for learning rate during training"
     },
     "scheduler_epoch": {
       "type": "integer",
       "default": 150,
-      "description": "Number of epochs for scheduler to downscale (save for resume)"
+      "description": "Number of epochs for the scheduler to downscale (save for resume)"
     },
     "resume": {
       "type": "boolean",
       "default": false,
-      "description": "Resume from checkpoint"
+      "description": "Resume training from a checkpoint"
     },
     "lr": {
       "type": "number",
       "default": 5e-4,
-      "description": "Learning rate"
+      "description": "Learning rate for the optimizer"
     },
     "adam_betas": {
       "type": "array",
@@ -134,32 +135,32 @@
     "epochs": {
       "type": "integer",
       "default": 150,
-      "description": "Number of epochs to train for"
+      "description": "Number of epochs to train the model"
     },
     "guidance_loss_scale": {
       "type": "integer",
       "default": 0,
-      "description": "Number of epochs to train for"
+      "description": "Scale factor for guidance loss in guided sampling"
     },
     "beta_schedule": {
       "type": "string",
       "default": "cosine",
-      "description": "Beta schedule type (cosine or linear)"
+      "description": "Type of beta schedule (cosine or linear)"
     },
     "wandbproject": {
       "type": "string",
       "default": "meteoDDPM",
-      "description": "Wandb project name"
+      "description": "Wandb project name for logging"
     },
     "use_wandb": {
       "type": "boolean",
       "default": false,
-      "description": "Use wandb for logging"
+      "description": "Use Wandb for logging"
     },
     "entityWDB": {
       "type": "string",
-      "default": "jrabault",
-      "description": "Wandb entity name"
+      "default": "your_entity",
+      "description": "Wandb entity name for logging"
     }
   },
   "required": ["mode", "run_name", "batch_size"]

@@ -10,8 +10,8 @@ DataSet class from Importance_Sampled images
 """
 
 import os
-import re
 import random
+import re
 
 import numpy as np
 import pandas as pd
@@ -27,24 +27,30 @@ var_dict = {'rr': 0, 'u': 1, 'v': 2, 't2m': 3, 'orog': 4}
 
 ################
 class ISDataset(Dataset):
-
     def __init__(self, config, path, csv_file, add_coords=False):
+        """
+        Initialize the ISDataset.
+        Args:
+            config: Configuration settings.
+            path (str): Directory path containing data.
+            csv_file (str): CSV file containing labels and information.
+            add_coords (bool): Whether to add positional encoding.
+        """
         self.data_dir = path
         self.labels = pd.read_csv(os.path.join(path, csv_file))
         self.config = config
-        # self.guide_img = pd.read_csv(os.path.join(path, config.guide_file))
-
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
         self.ensembles = None
+
+        # Group labels by guiding column if specified
         if self.config.guiding_col is not None:
             if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop('Unnamed: 0', axis=1)
-            self.ensembles = self.labels.groupby(
-                [self.config.guiding_col]).agg(lambda x: x)
+            self.ensembles = self.labels.groupby([self.config.guiding_col]).agg(lambda x: x)
             self.ensembles = self.ensembles["Name"]
 
-        ## adding 'positional encoding'
+        # Add positional encoding
         self.add_coords = add_coords
         try:
             Means = np.load(os.path.join(self.data_dir, config.mean_file))[self.VI]
@@ -67,12 +73,25 @@ class ISDataset(Dataset):
         )
 
     def __len__(self):
+        """
+        Get the length of the dataset.
+        Returns:
+            int: Number of samples in the dataset.
+        """
         return len(self.labels)
 
     def __getitem__(self, idx):
-        # idx=idx+19
+        """
+        Get a sample from the dataset.
+        Args:
+            idx (int): Index of the sample.
+        Returns:
+            dict: Dictionary containing 'img' (sample), 'img_id' (sample ID), and 'condition' (conditional sample).
+        """
         file_name = self.labels.iloc[idx, 0]
         sample = self.file_to_torch(file_name)
+
+        # Get conditional sample if ensembles are specified
         if self.ensembles is not None:
             ensemble_id = self.labels.loc[idx, self.config.guiding_col]
             try:
@@ -80,14 +99,22 @@ class ISDataset(Dataset):
                 ensemble.remove(self.labels.iloc[idx, 0])
                 ens = random.sample(ensemble, 1)
             except:
-                 ens = self.ensembles[ensemble_id]
+                ens = self.ensembles[ensemble_id]
             condition = self.file_to_torch(ens)
         else:
             condition = torch.empty(0)
+
         sample_id = re.search(r'\d+', file_name).group()
         return {'img': sample, 'img_id': sample_id, 'condition': condition}
 
     def file_to_torch(self, file_name):
+        """
+        Convert a file to a torch tensor.
+        Args:
+            file_name (str or list): Name of the file or list of file names.
+        Returns:
+            torch.Tensor: Torch tensor representing the sample.
+        """
         if type(file_name) == list:
             file_name = file_name[0]
         sample_path = os.path.join(self.data_dir, file_name)
@@ -96,4 +123,3 @@ class ISDataset(Dataset):
         sample = sample.transpose((1, 2, 0))
         sample = self.transform(sample)
         return sample
-

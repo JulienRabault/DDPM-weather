@@ -1,4 +1,3 @@
-import logging
 import os
 
 import numpy as np
@@ -6,32 +5,29 @@ import torch
 from tqdm import tqdm
 
 from ddpm.ddpm_base import Ddpm_base
-from utils.distributed import is_main_gpu, get_rank_num
+from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
 
 
 class Sampler(Ddpm_base):
-
-    
     def __init__(self, model: torch.nn.Module, config, dataloader=None) -> None:
         """
         Initialize the Sampler class.
         Args:
-            model: The neural network model for sampling.
+            model (torch.nn.Module): The neural network model for sampling.
             config: Configuration settings for sampling.
             dataloader: The data loader for input data (optional).
         """
         super().__init__(model, config, dataloader)
         self.loss_func = loss_dict["L1Loss"]
 
-
     def _simple_guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
         """
         Perform guided sampling of a batch of images.
         Args:
-            truth_sample_batch: Ground truth image batch for guidance.
-            guidance_loss_scale: Scaling factor for the guidance loss between [0 - 100].
-            random_noise: Whether to use random noise as the initial sample.
+            truth_sample_batch (torch.Tensor): Ground truth image batch for guidance.
+            guidance_loss_scale (float): Scaling factor for the guidance loss between [0 - 100].
+            random_noise (bool): Whether to use random noise as the initial sample.
         Returns:
             numpy.ndarray: Array of sampled images.
         """
@@ -59,10 +55,6 @@ class Sampler(Ddpm_base):
         Generate and save sample images during training.
         Args:
             filename_format (str): Format of the filename to save the images.
-            nb_img (int): Number of images to generate.
-            plot (bool): Whether to plot and save sampled images during the process.
-            sampling_mode (str): Sampling mode, choose between "simple", "guided", or "simple_guided".
-            random_noise (bool): Whether to use random noise as the initial sample.
         Returns:
             None
         """
