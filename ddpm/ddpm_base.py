@@ -61,11 +61,11 @@ class Ddpm_base:
                 return x
 
             self.transforms_func = transforms_func
-        if torch.__version__ >= "2.0.0":
-            try:
-                self.model = torch.compile(self.model)
-            except:
-                warnings.warn("Could not compile the model. Continuing without compilation.")
+        # if torch.__version__ >= "2.0.0":
+        #     try:
+        #         self.model = torch.compile(self.model)
+        #     except:
+        #         warnings.warn("Could not compile the model. Continuing without compilation.")
 
         # Convert model for multi-GPU training if available
         if torch.cuda.device_count() >= 2:
