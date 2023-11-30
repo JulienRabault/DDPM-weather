@@ -5,7 +5,7 @@ import os
 import jsonschema as jsonschema
 import yaml
 
-from utils.distributed import is_main_gpu, get_rank_num
+from utils.distributed import is_main_gpu, get_rank_num, synchronize
 
 CONFIG_SCHEMA_PATH = "utils/config_schema.json"
 
@@ -85,8 +85,7 @@ class Config:
         if self.mode == 'Train':
             paths.append(f"{self.run_name}/WANDB/")
             paths.append(f"{self.run_name}/WANDB/cache")
-        if is_main_gpu():
-            self._next_run_dir(paths)
+        self._next_run_dir(paths)
 
     def to_dict(self):
         # Convert configuration to a dictionary
@@ -170,5 +169,6 @@ class Config:
             if self.mode == 'Train':
                 paths.append(f"{self.run_name}/WANDB/")
                 paths.append(f"{self.run_name}/WANDB/cache")
+            synchronize()
             for path in paths:
                 os.makedirs(path, exist_ok=True)

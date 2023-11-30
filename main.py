@@ -154,12 +154,14 @@ def main_train(config):
     end = time.time()
     total_time = end - start
     logging.debug(f"Training execution time: {total_time} seconds")
+    synchronize()
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
-    config.model_path = f"{config.run_name}/best.pt"
+    config.model_path = os.path.join(config.run_name, "best.pt")
     model, _ = load_train_objs(config)
     sampler = Sampler(model, config, dataloader=sample_data)
     sampler.sample(filename_format="sample_best_{i}.npy")
+    logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
 
 
 def main_sample(config):
