@@ -65,7 +65,8 @@ class Trainer(Ddpm_base):
         Returns:
             float: Average loss for the epoch.
         """
-        b_sz = len(next(iter(self.dataloader)))
+        
+        # b_sz = len(next(iter(self.dataloader)))
         iters = len(self.dataloader)
         if dist.is_initialized():
             self.dataloader.sampler.set_epoch(epoch)
@@ -77,20 +78,31 @@ class Trainer(Ddpm_base):
         else:
             loop = enumerate(self.dataloader)
         for i, batch in loop:
-            batch, _ = batch.to(self.gpu_id)
+            step = epoch * iters + i
+            batch = batch[0]
+            batch = batch.to(self.gpu_id)
             loss = self._run_batch(batch)
             total_loss += loss
+            if is_main_gpu():
+                if self.config.save_step != -1 and step % self.config.save_step == 0.0:
+                    samples = self._sample_batch(self.config.n_sample)
+                    for j, s in enumerate(samples):
+                        filename = f"sample_step_{step}_{j}.npy"
+                        save_path = os.path.join(self.config.save_path, self.config.run_name, "samples", filename)
+                        np.save(save_path, s)
+                    self._save_snapshot(epoch, step, os.path.join(
+                        self.config.save_path, self.config.run_name, f"save_{step}.pt"))
             if self.config.scheduler:
                 self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
         if self.config.debug_log:
             print(
-                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {b_sz} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
+                f"\n#LOG : [GPU{self.gpu_id}] Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader)} | Last loss: {total_loss / len(self.dataloader)} | Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         return total_loss / len(self.dataloader)
 
-    def _save_snapshot(self, epoch, path, loss):
+    def _save_snapshot(self, epoch, step, path, loss=None):
         """
         Save a snapshot of the training progress.
         Args:
@@ -104,23 +116,22 @@ class Trainer(Ddpm_base):
         snapshot = {
             "MODEL_STATE": self.model.module.state_dict() if dist.is_initialized() else self.model.state_dict(),
             "EPOCHS_RUN": epoch,
+            'STEPS': step,
             'OPTIMIZER_STATE': self.optimizer.state_dict(),
             'BEST_LOSS': loss,
             'TIMESTAMP': self.timesteps,
             'DATA': {
-                'STDS': self.stds,
-                'MEANS': self.means,
                 'V_IDX': self.config.var_indexes,
                 'CROP': self.config.crop,
             }
         }
         if self.config.scheduler:
             snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
-        if self.config.use_wandb:
-            snapshot["WANDB_ID"] = wandb.run.id
+        # if self.config.use_wandb and wandb.run is not None:
+        #     snapshot["WANDB_ID"] = wandb.run.id
         torch.save(snapshot, path)
         print(
-            f"#INFO : Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
+            f"#INFO : Epoch {epoch}, step {step} | Training snapshot saved at {path} | Loss: {loss}")
 
     def _init_wandb(self):
         """
@@ -172,28 +183,25 @@ class Trainer(Ddpm_base):
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", "best.pt"), avg_loss)
+                    self._save_snapshot(epoch, int(epoch * (len(self.dataloader) / self.config.batch_size)), os.path.join(self.config.save_path, self.config.run_name, "best.pt"), avg_loss)
 
-                if epoch % self.config.any_time == 0.0:
+                if self.config.any_time != -1 and epoch % self.config.any_time == 0.0:
                     samples = self._sample_batch(self.config.n_sample)
                     for i, s in enumerate(samples):
                         filename = filename_format.format(epoch=epoch, i=i)
-                        save_path = os.path.join(self.config.run_name, "samples", filename)
+                        save_path = os.path.join(self.config.save_path, self.config.run_name, "samples", filename)
                         np.save(save_path, s)
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", f"save_{epoch}.pt"), avg_loss)
+                    self._save_snapshot(epoch, int(epoch * (len(self.dataloader) / self.config.batch_size)), os.path.join(self.config.save_path, self.config.run_name, f"save_{epoch}.pt"), avg_loss)
 
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
                 self._log(epoch, log)
-                self._save_snapshot(epoch, os.path.join(
-                    f"{self.config.run_name}", "last.pt"), avg_loss)
+                self._save_snapshot(epoch, int(epoch * (len(self.dataloader) / self.config.batch_size)), os.path.join(self.config.save_path, self.config.run_name, "last.pt"), avg_loss)
 
         if is_main_gpu():
-            wandb.finish()
+            # wandb.finish()
             print(
-                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
+                f"#INFO : Training finished, best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, saved at {os.path.join(self.config.save_path, self.config.run_name, 'best.pt')}")
 
     def sample_train(self, ep=None, nb_img=4):
         """
@@ -212,12 +220,12 @@ class Trainer(Ddpm_base):
         samples = super()._sample_batch(nb_img=nb_img)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
-            save_path = os.path.join(self.config.run_name, "samples", filename)
+            save_path = os.path.join(self.config.save_path, self.config.run_name, "samples", filename)
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         print(
-            f"\nSampling done. Images saved in {self.config.run_name}/samples/")
+            f"\nSampling done. Images saved in {self.config.save_path}/{self.config.run_name}/samples/")
 
     def _log(self, epoch, log_dict):
         """
@@ -228,9 +236,8 @@ class Trainer(Ddpm_base):
         Returns:
             None
         """
-        wandb.log(log_dict, step=epoch)
-        csv_filename = os.path.join(
-            f"{self.config.run_name}", "logs_train.csv")
+        # wandb.log(log_dict, step=epoch)
+        csv_filename = os.path.join(self.config.save_path, self.config.run_name, "logs_train.csv")
         file_exists = Path(csv_filename).is_file()
         with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
             fieldnames = ['epoch'] + list(log_dict.keys())

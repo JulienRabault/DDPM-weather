@@ -26,7 +26,7 @@ var_dict = {'rr': 0, 'u': 1, 'v': 2, 't2m': 3, 'orog': 4}
 ################
 class ISDataset(Dataset):
 
-    def __init__(self, config,path, csv_file, add_coords=False):
+    def __init__(self, config, path, csv_file, add_coords=False):
         self.data_dir = path
         self.labels = pd.read_csv(os.path.join(path, csv_file))
 
@@ -54,7 +54,7 @@ class ISDataset(Dataset):
 
     def __getitem__(self, idx):
         # idx=idx+19
-        file_name = self.labels.iloc[idx, 0]
+        file_name = self.labels.iloc[idx]["Name"]
         sample_path = os.path.join(self.data_dir, file_name)
         sample = np.float32(np.load(sample_path + '.npy')) \
             [self.VI, self.CI[0]:self.CI[1], self.CI[2]:self.CI[3]]

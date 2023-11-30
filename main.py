@@ -13,7 +13,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 import dataSet_Handler
-from distributed import get_rank, is_main_gpu, get_rank_num
+import dataset_handler_ddp
+from distributed import get_rank, is_main_gpu, get_rank_num, synchronize, get_world_size
 from sampler import Sampler
 from trainer import Trainer
 
@@ -76,18 +77,22 @@ def prepare_dataloader(config, path, csv_file):
     Returns:
         DataLoader: Data loader.
     """
-    train_set = dataSet_Handler.ISDataset(config, path, csv_file)
-
-    return DataLoader(
-        train_set,
-        batch_size=config.batch_size,
-        pin_memory=True,
-        shuffle=not torch.cuda.device_count() >= 2,
-        num_workers=cpu_count(),
-        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=True,
-                                   drop_last=False) if torch.cuda.device_count() >= 2 else None,
-        drop_last=False
-    )
+    if config.dataloader_rr:
+        dataloader = dataset_handler_ddp.ISData_Loader("Train", config)
+        kwargs = {'pin_memory': True}
+        return dataloader.loader(get_world_size(), get_rank_num(), kwargs)
+    else:
+        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
+        return DataLoader(
+            train_set,
+            batch_size=config.batch_size,
+            pin_memory=True,
+            shuffle=not torch.cuda.device_count() >= 2,
+            num_workers=cpu_count(),
+            sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=True,
+                                    drop_last=True) if torch.cuda.device_count() >= 2 else None,
+            drop_last=True
+        )
 
 
 def print_config(config):
@@ -109,7 +114,7 @@ def save_config(config):
     Args:
         config (Namespace): Configuration parameters.
     """
-    with open(f"{config.run_name}/config.txt", 'w') as f:
+    with open(os.path.join(config.save_path, config.run_name, "config.txt"), 'w') as f:
         for arg in vars(config):
             f.write(f"\t{arg}: {getattr(config, arg)}\n")
 
@@ -150,7 +155,7 @@ def check_config(config):
         config.n_sample = n_sample // world_size
 
     config.var_indexes = ['t2m'] if config.v_i == 1 else [
-        'u', 'v'] if config.v_i == 2 else ['u', 'v', 't2m']
+        'u', 'v'] if config.v_i == 2 else ['rr', 'u', 'v', 't2m']
 
     # Save configuration and print if running on local rank 0
     if get_rank() == 0:
@@ -173,12 +178,12 @@ def check_path(config):
         elif config.mode != 'Train':
             print('#INFO: Mode Sample selected')
     paths = [
-        f"{config.run_name}/",
-        f"{config.run_name}/samples/",
+        os.path.join(config.save_path, config.run_name),
+        os.path.join(config.save_path, config.run_name, "samples"),
     ]
     if config.mode == 'Train':
-        paths.append(f"{config.run_name}/WANDB/")
-        paths.append(f"{config.run_name}/WANDB/cache")
+        paths.append(os.path.join(config.save_path, config.run_name, "WANDB"))
+        paths.append(os.path.join(config.save_path, config.run_name, "WANDB/cache"))
     # Check paths if resuming, else create them
     if is_main_gpu():
         if config.resume:
@@ -198,12 +203,12 @@ def check_path(config):
                     train_name = f"{train_name}_{train_num}"
             config.run_name = train_name
             paths = [
-                f"{config.run_name}/",
-                f"{config.run_name}/samples/",
+                os.path.join(config.save_path, config.run_name),
+                os.path.join(config.save_path, config.run_name, "samples"),
             ]
             if config.mode == 'Train':
-                paths.append(f"{config.run_name}/WANDB/")
-                paths.append(f"{config.run_name}/WANDB/cache")
+                paths.append(os.path.join(config.save_path, config.run_name, "WANDB"))
+                paths.append(os.path.join(config.save_path, config.run_name, "WANDB/cache"))
             for path in paths:
                 print(f"Creating directory {path}")
                 os.makedirs(path, exist_ok=True)
@@ -227,7 +232,7 @@ def main_train(config):
         print(f"\n#LOG: Training execution time: {total_time} seconds")
     if is_main_gpu():
         # Sample best model
-        config.model_path = f"{config.run_name}/best.pt"
+        config.model_path = os.path.join(config.save_path, config.run_name, "best.pt")
         model, _ = load_train_objs(config)
         sampler = Sampler(model, config)
         sampler.sample(filename_format="sample_best_{i}.npy", nb_img=config.n_sample, plot=config.plot)
@@ -256,9 +261,10 @@ def get_parser():
     general_args.add_argument(dest='mode', choices=['Train', 'Sample'],
                               help='Execution mode: Choose between Train or Sample')
     general_args.add_argument('--run_name', type=str, default='run', help='Name for the training run')
-    general_args.add_argument('-bs', '--batch_size', type=int, default=32, help='Batch size')
-    general_args.add_argument('-a', '--any_time', type=int, default=400,
+    general_args.add_argument('-bs', '--batch_size', type=int, default=8, help='Batch size')
+    general_args.add_argument('-a', '--any_time', type=int, default=-1,
                               help='Every how many epochs to save and sample')
+    general_args.add_argument('--save_step', type=int, default=-1, help="Save samples every <save_step> steps")
     general_args.add_argument('-mp', '--model_path', type=str, default=None,
                               help='Path to the model for loading and resuming training if necessary (no path will start training from scratch)')
     general_args.add_argument("--debug", dest="debug_log", default=False, action="store_true",
@@ -276,19 +282,23 @@ def get_parser():
 
     # Data parameters
     data_args = parser.add_argument_group('Data Parameters')
-    data_args.add_argument('-dd', '--data_dir', type=str, default=None, help='Directory containing the data')
-    data_args.add_argument('--csv_file', type=str, default=None, help='Path to the csv file containing the labels data')
-    data_args.add_argument('-nvi', '--v_i', type=int, default=3, help='Number of variable indices')
-    data_args.add_argument('-vi', '--var_indexes', type=list, default=['u', 'v', 't2m'],
+    data_args.add_argument('--save_path', type=str, default="/scratch/work/gandonb/Exp_DDPM")
+    data_args.add_argument('-dd', '--data_dir', type=str, default='/scratch/work/gandonb/data/cropped_120_376_540_796/', help='Directory containing the data')
+    data_args.add_argument('--csv_file', type=str, default='/scratch/work/gandonb/data/cropped_120_376_540_796/labels.csv', help='Path to the csv file containing the labels data')
+    data_args.add_argument('-nvi', '--v_i', type=int, default=4, help='Number of variable indices')
+    data_args.add_argument('-vi', '--var_indexes', type=list, default=['rr', 'u', 'v', 't2m'],
                            help='List of variable indices')
-    data_args.add_argument('-c', '--crop', type=list, default=[78, 206, 55, 183], help='Crop parameters for images')
+    data_args.add_argument('-c', '--crop', type=list, default=[0, 256, 0, 256], help='Crop parameters for images')
     data_args.add_argument("--auto_normalize", dest="auto_normalize", default=False, action="store_true",
                            help="Automatically normalize")
     data_args.add_argument("--invert_norm", dest="invert_norm", default=False, action="store_true",
                            help="Invert normalization of image samples")
-    data_args.add_argument('-is', '--image_size', type=int, default=128, help='Size of the image')
-    data_args.add_argument('-mf', '--mean_file', type=str, default='mean_with_orog.npy', help='Mean file path')
-    data_args.add_argument('-xf', '--max_file', type=str, default='max_with_orog.npy', help='Max file path')
+    data_args.add_argument('-is', '--image_size', type=int, default=256, help='Size of the image')
+
+    # Dataloading parameters
+    dataloading_args = parser.add_argument_group('Dataloading Parameters')
+    dataloading_args.add_argument('--dataloader_rr', action="store_true", help="Use to load data with the specific rr dataloader")
+    dataloading_args.add_argument('--dataset_handler_config', type=str, default="", help="The dataset_handler config file")
 
     # Model parameters
     training_args = parser.add_argument_group('Train Parameters')
@@ -307,15 +317,15 @@ def get_parser():
 
     # Tracking parameters
     tracking_args = parser.add_argument_group('Tracking Parameters')
-    tracking_args.add_argument("--wandbproject", dest="wp", type=str, default="meteoDDPM", help="Wandb project name")
+    tracking_args.add_argument("--wandbproject", dest="wp", type=str, default="DDPM", help="Wandb project name")
     tracking_args.add_argument("-w", "--wandb", dest="use_wandb", default=False, action="store_true",
                                help="Use wandb for logging")
-    tracking_args.add_argument("--entityWDB", type=str, default="jrabault", help="Wandb entity name")
+    tracking_args.add_argument("--entityWDB", type=str, default="jojobarbar", help="Wandb entity name")
     return parser
 
 
 if __name__ == "__main__":
-
+    
     config = get_parser().parse_args()
     # assert config.n_sample <= config.batch_size, 'can only work with n_sample <=  batch_size'
     ddp_setup(config)
@@ -328,8 +338,8 @@ if __name__ == "__main__":
         os.environ['WANDB_MODE'] = 'disabled'
     else:
         os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
-        os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
+        os.environ['WANDB_CACHE_DIR'] = os.path.join(config.save_path, config.run_name, "WANDB/cache")
+        os.environ['WANDB_DIR'] = os.path.join(config.save_path, config.run_name, "WANDB")
 
     if is_main_gpu():
         print_config(config)

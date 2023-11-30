@@ -72,7 +72,9 @@ class Sampler(Ddpm_base):
                 samples = super()._sample_batch(nb_img=batch_size)
                 for s in samples:
                     filename = filename_format.format(i=str(i))
-                    save_path = os.path.join(self.config.run_name, "samples", filename)
+                    save_path = os.path.join(self.config.save_path, self.config.run_name, "samples_true_2")
+                    os.makedirs(save_path, exist_ok=True)
+                    save_path = os.path.join(save_path, filename)
                     np.save(save_path, s)
                     i += max(torch.cuda.device_count(), 1)
                 b += batch_size

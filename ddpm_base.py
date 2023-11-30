@@ -36,20 +36,11 @@ class Ddpm_base:
         model.to(torch.device(self.gpu_id))
         if self.dataloader is not None:
             self.train_dataset = self.dataloader.dataset
-            self.stds = self.train_dataset.stds
-            self.means = self.train_dataset.means
-        if config.invert_norm:
-            self.transforms_func = transforms.Compose([
-                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                     std=[1 / el for el in self.stds]),
-                transforms.Normalize(mean=[-el for el in self.means],
-                                     std=[1.] * len(self.config.var_indexes)),
-            ])
-        else:
-            def transforms_func(x):
-                return x
+        
+        def transforms_func(x):
+            return x
 
-            self.transforms_func = transforms_func
+        self.transforms_func = transforms_func
 
         if torch.cuda.device_count() >= 2:
             self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
@@ -78,8 +69,6 @@ class Ddpm_base:
                 raise ValueError("The variable indexes or crop of the snapshot do not match the current config")
         except KeyError:
             warnings.warn("The snapshot does not contain data config, assuming it is the same as the current config")
-        self.stds = snapshot["STDS"]
-        self.means = snapshot["MEANS"]
         if self.config.debug_log:
             print(
                 f"\n#LOG : [GPU{self.gpu_id}] Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
