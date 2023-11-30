@@ -108,6 +108,7 @@ class Trainer(Ddpm_base):
             f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
+            condition = None
             if self.guided_diffusion:
                 condition = self._prepare_batch(next(iter(self.dataloader)), ['condition'])
                 condition = condition['condition'][:self.config.n_sample]
