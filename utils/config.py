@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-
+from pathlib import Path
 import jsonschema as jsonschema
 import yaml
 
@@ -24,7 +24,7 @@ TYPE_MAPPER = {
     "boolean": bool,
     "array": list,
     "list": list,
-    "float": float
+    "float": float,
 }
 
 class Config:
@@ -56,6 +56,7 @@ class Config:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
         # Check specific conditions for certain configuration values
+        self.output_dir = Path(self.output_dir)
         if self.sampling_mode == 'guided' or self.sampling_mode == 'simple_guided':
             assert self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100, \
                 "Guidance loss scale must be between 0 and 100."
@@ -79,12 +80,12 @@ class Config:
                                     f"Setting n_sample={self.n_sample} to batch_size={self.batch_size}.")
         # Check and create directories based on the configuration
         paths = [
-            f"{self.run_name}/",
-            f"{self.run_name}/samples/",
+            self.output_dir / self.run_name,
+            self.output_dir / self.run_name / "samples",
         ]
         if self.mode == 'Train':
-            paths.append(f"{self.run_name}/WANDB/")
-            paths.append(f"{self.run_name}/WANDB/cache")
+            paths.append(self.output_dir / self.run_name / "WANDB")
+            paths.append(self.output_dir / self.run_name / "WANDB/cache")
         self._next_run_dir(paths)
 
     def to_dict(self):
@@ -154,7 +155,7 @@ class Config:
         else:
             train_num = 1
             train_name = self.run_name
-            while os.path.exists(train_name):
+            while os.path.exists(self.output_dir / train_name):
                 if f"_{train_num}" in train_name:
                     train_name = "_".join(train_name.split(
                         '_')[:-1]) + f"_{train_num + 1}"
@@ -163,12 +164,12 @@ class Config:
                     train_name = f"{train_name}_{train_num}"
             self.run_name = train_name
             paths = [
-                f"{self.run_name}/",
-                f"{self.run_name}/samples/",
+                self.output_dir / self.run_name,
+                self.output_dir / self.run_name / "samples",
             ]
             if self.mode == 'Train':
-                paths.append(f"{self.run_name}/WANDB/")
-                paths.append(f"{self.run_name}/WANDB/cache")
+                paths.append(self.output_dir / self.run_name / "WANDB/")
+                paths.append(self.output_dir / self.run_name / "WANDB/cache")
             synchronize()
             for path in paths:
                 os.makedirs(path, exist_ok=True)

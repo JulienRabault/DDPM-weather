@@ -21,7 +21,6 @@ from ddpm.sampler import Sampler
 from ddpm.trainer import Trainer
 from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
-from ddpm import dataset_handler_ddp
 
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
@@ -53,7 +52,7 @@ def setup_logger(config, log_file="ddpm.log"):
     console_handler.setFormatter(console_formatter)
 
     # File handler for saving log messages to a file
-    file_handler = logging.FileHandler(os.path.join(config.run_name, log_file), mode='w+')
+    file_handler = logging.FileHandler(config.output_dir / config.run_name / log_file, mode='w+')
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
     file_handler.setFormatter(file_formatter)
@@ -112,7 +111,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config, path, csv_file):
+def prepare_dataloader(config):
     """
     Prepare the data loader.
     Args:
@@ -120,24 +119,18 @@ def prepare_dataloader(config, path, csv_file):
     Returns:
         DataLoader: Data loader.
     """
-
-    if config.dataloader_rr:
-        dataloader = dataset_handler_ddp.ISData_Loader("Train", config)
-        kwargs = {'pin_memory': True}
-        return dataloader.loader(get_world_size(), get_rank_num(), kwargs)
-    else:
-        # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
-        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
-        return DataLoader(
-            train_set,
-            batch_size=config.batch_size,
-            pin_memory=True,
-            shuffle=not torch.cuda.device_count() >= 2,
-            num_workers=cpu_count(),
-            sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
-                                    drop_last=True) if torch.cuda.device_count() >= 2 else None,
-            drop_last=True
-        )
+    # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
+    train_set = dataSet_Handler.ISDataset(config)
+    return DataLoader(
+        train_set,
+        batch_size=config.batch_size,
+        pin_memory=True,
+        shuffle=not torch.cuda.device_count() >= 2,
+        num_workers=1,
+        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
+                                drop_last=True) if torch.cuda.device_count() >= 2 else None,
+        drop_last=True
+    )
 
 def main_train(config):
     """
@@ -147,7 +140,7 @@ def main_train(config):
     """
     # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
+    train_data = prepare_dataloader(config)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train()
@@ -157,7 +150,7 @@ def main_train(config):
     synchronize()
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
-    config.model_path = os.path.join(config.run_name, "best.pt")
+    config.model_path = config.output_dir / config.run_name / "best.pt"
     model, _ = load_train_objs(config)
     sampler = Sampler(model, config, dataloader=sample_data)
     sampler.sample(filename_format="sample_best_{i}.npy")
@@ -193,7 +186,6 @@ if __name__ == "__main__":
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
-
     local_rank = get_rank()
 
     # Configure logging and synchronize processes
@@ -201,13 +193,13 @@ if __name__ == "__main__":
         os.environ['WANDB_MODE'] = 'disabled'
     else:
         os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
-        os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
+        os.environ['WANDB_CACHE_DIR'] = str(config.output_dir / config.run_name / "WANDB/cache")
+        os.environ['WANDB_DIR'] = str(config.output_dir / config.run_name / "WANDB")
     synchronize()
     setup_logger(config)
     logger = logging.getLogger(f'logddp_{get_rank_num()}')
     if is_main_gpu():
-        config.save(f"{config.run_name}/config_train.yml")
+        config.save(config.output_dir / config.run_name / "config_train.yml")
         logger.info(config)
         logger.info(f'Mode {config.mode} selected')
 
