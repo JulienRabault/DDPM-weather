@@ -21,7 +21,6 @@ from ddpm.sampler import Sampler
 from ddpm.trainer import Trainer
 from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
-from ddpm import dataset_handler_ddp
 
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
@@ -120,24 +119,20 @@ def prepare_dataloader(config, path, csv_file):
     Returns:
         DataLoader: Data loader.
     """
+    # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
+    train_set = dataSet_Handler.ISDataset(config, path, csv_file)
 
-    if config.dataloader_rr:
-        dataloader = dataset_handler_ddp.ISData_Loader("Train", config)
-        kwargs = {'pin_memory': True}
-        return dataloader.loader(get_world_size(), get_rank_num(), kwargs)
-    else:
-        # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
-        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
-        return DataLoader(
-            train_set,
-            batch_size=config.batch_size,
-            pin_memory=True,
-            shuffle=not torch.cuda.device_count() >= 2,
-            num_workers=cpu_count(),
-            sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
-                                    drop_last=True) if torch.cuda.device_count() >= 2 else None,
-            drop_last=True
-        )
+    return DataLoader(
+        train_set,
+        batch_size=config.batch_size,
+        pin_memory=True,
+        shuffle=not torch.cuda.device_count() >= 2,
+        num_workers=cpu_count(),
+        sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
+                                   drop_last=False) if torch.cuda.device_count() >= 2 else None,
+        drop_last=False
+    )
+
 
 def main_train(config):
     """
@@ -188,6 +183,7 @@ if __name__ == "__main__":
 
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
+
     ddp_setup()
 
     Config.create_arguments(parser, schema)
@@ -206,6 +202,7 @@ if __name__ == "__main__":
     synchronize()
     setup_logger(config)
     logger = logging.getLogger(f'logddp_{get_rank_num()}')
+
     if is_main_gpu():
         config.save(f"{config.run_name}/config_train.yml")
         logger.info(config)
