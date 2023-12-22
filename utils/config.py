@@ -35,6 +35,7 @@ class Config:
         for prop, value in yaml_config.items():
             setattr(self, prop, value)
         self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
+
         self._validate_config()
 
     def __str__(self):
@@ -49,6 +50,12 @@ class Config:
         # Update configuration attributes from command line arguments
         for prop, value in args.__dict__.items():
             setattr(self, prop, value)
+
+    def _update_from_dict(self, dict):
+        # Update configuration attributes from dict
+        for prop, value in dict.items():
+            setattr(self, prop, value)
+
 
     def _validate_config(self):
         # Validate the configuration against a JSON schema
@@ -72,8 +79,11 @@ class Config:
         if self.any_time > self.epochs:
             if is_main_gpu():
                 self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
-        if self.n_sample > self.batch_size and self.guiding_col is not None:
-            self.n_sample = self.batch_size
+
+        cond_n_sample = self.batch_size if isinstance(self.batch_size, int) else min(self.batch_size)
+
+        if self.n_sample > cond_n_sample and self.guiding_col is not None:
+            self.n_sample = cond_n_sample
             if is_main_gpu():
                 self.logger.warning(f"n_sample={self.n_sample} is greater than batch_size={self.batch_size}. "
                                     f"Setting n_sample={self.n_sample} to batch_size={self.batch_size}.")
@@ -108,6 +118,7 @@ class Config:
     @classmethod
     def from_args_and_yaml(cls, args):
         # Create a Config object from command line arguments and a YAML file
+        print("from_args_and_yaml")
         config = cls(args)
         return config
 

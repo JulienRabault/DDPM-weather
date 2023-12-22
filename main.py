@@ -22,6 +22,13 @@ from ddpm.trainer import Trainer
 from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
 
+from itertools import product
+import numpy as np
+# list of parameters available for grid search
+# every parameters must be modified in config_schema.json
+# with "oneOf" to handle 2 types of variable.
+GRIDSEARCH_PARAM = ["batch_size", "lr"]
+
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
 gc.collect()
@@ -175,6 +182,27 @@ def main_sample(config):
     sampler.sample()
 
 
+def cartesian_product(parameters):
+    keys = list(parameters.keys())
+    arrays = [np.asarray(parameters[key]) for key in keys]
+    cartesian_product_array = np.array(np.meshgrid(*arrays)).T.reshape(-1, len(arrays))
+
+    result = []
+
+    for param_values in cartesian_product_array:
+        param_set = {key: convert_to_type(value, parameters[key]) for key, value in zip(keys, param_values)}
+        result.append(param_set)
+
+    return result
+
+def convert_to_type(value, type_list):
+    if isinstance(type_list, list):
+        return int(value) if isinstance(type_list[0], int) else float(value)
+    else:
+        return int(value) if isinstance(type_list, int) else float(value)
+
+
+
 if __name__ == "__main__":
     # Parse command line arguments and load configuration
     parser = argparse.ArgumentParser(description='Deep Learning Training and Testing Script')
@@ -184,39 +212,56 @@ if __name__ == "__main__":
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
 
-    ddp_setup()
-
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
 
-    local_rank = get_rank()
+    param_values_list = [
+        config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
+    grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
-    # Configure logging and synchronize processes
-    if not config.use_wandb:
-        os.environ['WANDB_MODE'] = 'disabled'
-    else:
-        os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
-        os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
-    synchronize()
-    setup_logger(config)
-    logger = logging.getLogger(f'logddp_{get_rank_num()}')
+    run_name = config.run_name
 
-    if is_main_gpu():
-        config.save(f"{config.run_name}/config_train.yml")
-        logger.info(config)
-        logger.info(f'Mode {config.mode} selected')
+    for k, current_params in enumerate(cartesian_product(grid_search_dict)):
+        print("\n", "="*80)
+        print("="*80)
+        print("GRIDSEARCH PARAM COMBINAISON :", current_params)
+        print("*"*80)
+        print("*"*80, "\n")
+        config._update_from_dict(current_params)
 
-    synchronize()
-    logger.debug(f"Local_rank: {local_rank}")
+        if os.path.exists(run_name) and k>0:
+            config._next_run_dir(run_name)
 
-    # Execute the main training or sampling function based on the mode
-    if config.mode == 'Train':
-        main_train(config)
-    elif config.mode != 'Train':
-        main_sample(config)
+        ddp_setup()
 
-    # Clean up distributed processes if initialized
-    if dist.is_initialized():
-        destroy_process_group()
+        local_rank = get_rank()
+
+        # Configure logging and synchronize processes
+        if not config.use_wandb:
+            os.environ['WANDB_MODE'] = 'disabled'
+        else:
+            os.environ['WANDB_MODE'] = 'offline'
+            os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
+            os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
+        synchronize()
+        setup_logger(config)
+        logger = logging.getLogger(f'logddp_{get_rank_num()}')
+
+        if is_main_gpu():
+            config.save(f"{config.run_name}/config_train.yml")
+            logger.info(config)
+            logger.info(f'Mode {config.mode} selected')
+
+        synchronize()
+        logger.debug(f"Local_rank: {local_rank}")
+
+        # Execute the main training or sampling function based on the mode
+        if config.mode == 'Train':
+            main_train(config)
+        elif config.mode != 'Train':
+            main_sample(config)
+
+        # Clean up distributed processes if initialized
+        if dist.is_initialized():
+            destroy_process_group()
