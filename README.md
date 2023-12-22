@@ -98,6 +98,8 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `image_size` : Taille de l'image.
 - `mean_file` : Chemin du fichier de moyenne.
 - `max_file` : Chemin du fichier de maximum.
+- `guiding_col` : Colonne à utiliser pour l'échantillonnage guidé. Requis lors de l'utilisation du mode guidé.
+- `csv_file` : Chemin du fichier csv des labels (nécessaire pour le guidage).
 ### Paramètres du Modèle :
 - `scheduler` : Utiliser un planificateur pour le taux d'apprentissage.
 - `scheduler_epoch` : Nombre d'époques pour le planificateur pour ajuster le taux d'apprentissage (sauvegarde pour la reprise).
