@@ -118,7 +118,6 @@ class Config:
     @classmethod
     def from_args_and_yaml(cls, args):
         # Create a Config object from command line arguments and a YAML file
-        print("from_args_and_yaml")
         config = cls(args)
         return config
 

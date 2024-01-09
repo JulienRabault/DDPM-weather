@@ -223,11 +223,13 @@ if __name__ == "__main__":
     run_name = config.run_name
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
-        print("\n", "="*80)
-        print("="*80)
-        print("GRIDSEARCH PARAM COMBINAISON :", current_params)
-        print("*"*80)
-        print("*"*80, "\n")
+
+        logging.warning("="*80)
+        logging.warning("="*80)
+        logging.warning(f"GRIDSEARCH PARAM COMBINAISON : {current_params}")
+        logging.warning("*"*80)
+        logging.warning("*"*80)
+
         config._update_from_dict(current_params)
 
         if os.path.exists(run_name) and k>0:
