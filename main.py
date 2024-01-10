@@ -212,6 +212,8 @@ if __name__ == "__main__":
     with open('utils/config_schema.json', 'r') as schema_file:
         schema = json.load(schema_file)
 
+    ddp_setup()
+
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
@@ -227,15 +229,14 @@ if __name__ == "__main__":
         logging.warning("="*80)
         logging.warning("="*80)
         logging.warning(f"GRIDSEARCH PARAM COMBINAISON : {current_params}")
+        logging.warning(f"GRIDSEARCH PARAM COMBINAISON : { ','.join(map(str,list(current_params.values())))       }")
         logging.warning("*"*80)
         logging.warning("*"*80)
 
         config._update_from_dict(current_params)
 
         if os.path.exists(run_name) and k>0:
-            config._next_run_dir(run_name)
-
-        ddp_setup()
+            config._next_run_dir(run_name, suffix=','.join(map(str,list(current_params.values()))))
 
         local_rank = get_rank()
 
@@ -264,6 +265,6 @@ if __name__ == "__main__":
         elif config.mode != 'Train':
             main_sample(config)
 
-        # Clean up distributed processes if initialized
-        if dist.is_initialized():
-            destroy_process_group()
+    # Clean up distributed processes if initialized
+    if dist.is_initialized():
+        destroy_process_group()

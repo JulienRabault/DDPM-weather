@@ -154,16 +154,21 @@ class Config:
                     help=arg_help
                 )
 
-    def _next_run_dir(self, paths):
+    def _next_run_dir(self, paths, suffix=None):
         # Create directories for the next run
         if self.resume:
             for path in paths:
                 if not os.path.exists(path):
                     raise FileNotFoundError(
                         f"The following directories do not exist: {path}")
+
         else:
             train_num = 1
-            train_name = self.run_name
+            # if suffix is not None : 
+            #     train_name = self.run_name + "_" + suffix
+            # else : 
+            train_name = self.run_name 
+
             while os.path.exists(train_name):
                 if f"_{train_num}" in train_name:
                     train_name = "_".join(train_name.split(
