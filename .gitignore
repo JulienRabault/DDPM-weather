@@ -8,3 +8,4 @@ run.sh
 preproc.py
 run*
 preproc.py
+*.pyc
