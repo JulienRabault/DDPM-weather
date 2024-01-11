@@ -27,7 +27,7 @@ import numpy as np
 # list of parameters available for grid search
 # every parameters must be modified in config_schema.json
 # with "oneOf" to handle 2 types of variable.
-GRIDSEARCH_PARAM = ["batch_size", "lr"]
+GRIDSEARCH_PARAM = ["batch_size", "lr", "beta_schedule"]
 
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
@@ -197,10 +197,13 @@ def cartesian_product(parameters):
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):
-        return int(value) if isinstance(type_list[0], int) else float(value)
+        if isinstance(type_list[0], int) : return int(value)  
+        elif isinstance(type_list[0], float) : return float(value)
+        else : return str(value)
     else:
-        return int(value) if isinstance(type_list, int) else float(value)
-
+        if isinstance(type_list, int) :return int(value)
+        elif isinstance(type_list, float) : return float(value)
+        else : return str(value)
 
 
 if __name__ == "__main__":
@@ -264,6 +267,7 @@ if __name__ == "__main__":
             main_train(config)
         elif config.mode != 'Train':
             main_sample(config)
+
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():

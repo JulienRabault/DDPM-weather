@@ -207,9 +207,31 @@
       "description": "Scale factor for guidance loss in guided sampling"
     },
     "beta_schedule": {
-      "type": "string",
-      "default": "cosine",
-      "description": "Type of beta schedule (cosine or linear)"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "cosine",
+            "linear"
+          ],
+          "default": "linear",
+          "description": "Type of beta schedule (cosine or linear)"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "cosine",
+              "linear"
+            ]
+          },
+          "default": [
+            "cosine"
+          ],
+          "description": "List of types for beta schedule"
+        }
+      ]
     },
     "wandbproject": {
       "type": "string",
