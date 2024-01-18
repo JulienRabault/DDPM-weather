@@ -6,6 +6,7 @@ import jsonschema as jsonschema
 import yaml
 
 from utils.distributed import is_main_gpu, get_rank_num, synchronize
+import datetime
 
 CONFIG_SCHEMA_PATH = "utils/config_schema.json"
 
@@ -37,6 +38,7 @@ class Config:
         self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
 
         self._validate_config()
+        self.basename = self.run_name
 
     def __str__(self):
         # Return a string representation of the configuration
@@ -96,6 +98,7 @@ class Config:
             paths.append(f"{self.run_name}/WANDB/")
             paths.append(f"{self.run_name}/WANDB/cache")
         self._next_run_dir(paths)
+        return 
 
     def to_dict(self):
         # Convert configuration to a dictionary
@@ -163,20 +166,23 @@ class Config:
                         f"The following directories do not exist: {path}")
 
         else:
+            current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S%f")[:-3]
             train_num = 1
-            # if suffix is not None : 
-            #     train_name = self.run_name + "_" + suffix
-            # else : 
-            train_name = self.run_name 
-
+            train_name = self.run_name
             while os.path.exists(train_name):
-                if f"_{train_num}" in train_name:
-                    train_name = "_".join(train_name.split(
-                        '_')[:-1]) + f"_{train_num + 1}"
-                    train_num += 1
+                if suffix is not None:
+                    train_name = self.basename + "__" + suffix + "_" + current_datetime
                 else:
-                    train_name = f"{train_name}_{train_num}"
+                    while os.path.exists(train_name):
+                        if f"_{train_num}" in train_name:
+                            train_name = "_".join(train_name.split(
+                                '_')[:-1]) + f"_{train_num + 1}"
+                            train_num += 1
+                        else:
+                            train_name = f"{train_name}_{train_num}"
+            
             self.run_name = train_name
+
             paths = [
                 f"{self.run_name}/",
                 f"{self.run_name}/samples/",

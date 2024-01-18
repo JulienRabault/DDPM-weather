@@ -30,7 +30,7 @@
   "resume": false,
   "epochs": 1,
   "beta_schedule": ["linear", "cosine"],
-  "lr": [0.0005, 0.00005],
+  "lr": [0.0001, 0.0005, 0.00005],
 
   # Tracking parameters
   "wandbproject": "your_wandb_project",

@@ -243,7 +243,7 @@ if __name__ == "__main__":
 
     logging.warning("*"*80)
     logging.warning("GRIDSEARCH COMBINAISONS :")
-    for el in cartesian_product(grid_search_dict): 
+    for el in cartesian_product(grid_search_dict):
         logging.warning(f"- { el}")
     logging.warning("*"*80)
 
@@ -258,7 +258,7 @@ if __name__ == "__main__":
         config._update_from_dict(current_params)
 
         if os.path.exists(run_name) and k>0:
-            config._next_run_dir(run_name, suffix=','.join(map(str,list(current_params.values()))))
+            config._next_run_dir(run_name, suffix='_'.join(map(str,list(current_params.values()))))
 
         local_rank = get_rank()
 
