@@ -2,7 +2,7 @@
   # General parameters
   "mode": "Train",
   "run_name": "run_train",
-  "batch_size": [1,2],
+  "batch_size": [1],
   "any_time": 25,
 
   # Sampling parameters
@@ -29,7 +29,7 @@
   "scheduler_epoch": 1,
   "resume": false,
   "epochs": 1,
-  "beta_schedule": "linear",
+  "beta_schedule": ["linear", "cosine"],
   "lr": [0.0005, 0.00005],
 
   # Tracking parameters

@@ -241,14 +241,19 @@ if __name__ == "__main__":
 
     run_name = config.run_name
 
+    logging.warning("*"*80)
+    logging.warning("GRIDSEARCH COMBINAISONS :")
+    for el in cartesian_product(grid_search_dict): 
+        logging.warning(f"- { el}")
+    logging.warning("*"*80)
+
+    run_name = config.run_name
+
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
-        logging.warning("="*80)
-        logging.warning("="*80)
-        logging.warning(f"GRIDSEARCH PARAM COMBINAISON : {current_params}")
-        logging.warning(f"GRIDSEARCH PARAM COMBINAISON : { ','.join(map(str,list(current_params.values())))       }")
-        logging.warning("*"*80)
-        logging.warning("*"*80)
+        logging.warning("\t"+"-"*80)
+        logging.warning("\t"+f"COMBINAISON : {current_params}")
+        logging.warning("\t"+"-"*80)
 
         config._update_from_dict(current_params)
 
