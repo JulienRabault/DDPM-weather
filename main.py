@@ -169,16 +169,22 @@ def main_train(config):
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
     config.model_path = os.path.join(config.run_name, "best.pt")
-    model, _ = load_train_objs(config)
-    sampler = Sampler(model, config, dataloader=sample_data)
-    sampler.sample(filename_format="sample_best_{i}.npy")
-    logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+
+    try:
+        model, _ = load_train_objs(config)
+        sampler = Sampler(model, config, dataloader=sample_data)
+        sampler.sample(filename_format="sample_best_{i}.npy")
+        logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+        del sampler
+        del model
+
+    except FileNotFoundError:
+        logging.warning(f"The best model was not created or is not found in {config.run_name}.")
 
     # Delete all variables to prevent GPU memory leaks
     del train_data
-    del model
-    del sampler
     torch.cuda.empty_cache()
+
 
 def main_sample(config):
     """
@@ -218,8 +224,7 @@ def convert_to_type(value, type_list):
         if isinstance(type_list, int) :return int(value)
         elif isinstance(type_list, float) : return float(value)
         else : return str(value)
-
-
+ 
 if __name__ == "__main__":
     # Parse command line arguments and load configuration
     parser = argparse.ArgumentParser(description='Deep Learning Training and Testing Script')
@@ -234,7 +239,6 @@ if __name__ == "__main__":
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
-
     param_values_list = [
         config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
     grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
@@ -247,18 +251,17 @@ if __name__ == "__main__":
         logging.warning(f"- { el}")
     logging.warning("*"*80)
 
-    run_name = config.run_name
-
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
         logging.warning("\t"+"-"*80)
         logging.warning("\t"+f"COMBINAISON : {current_params}")
         logging.warning("\t"+"-"*80)
 
+        if k>0 : config = Config.from_args_and_yaml(args)
         config._update_from_dict(current_params)
 
-        if os.path.exists(run_name) and k>0:
-            config._next_run_dir(run_name, suffix='_'.join(map(str,list(current_params.values()))))
+        # if os.path.exists(run_name) and k>0:
+        #     config._next_run_dir(run_name, suffix='_'.join(map(str,list(current_params.values()))))
 
         local_rank = get_rank()
 
