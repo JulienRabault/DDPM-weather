@@ -1,10 +1,11 @@
-﻿.idea
-__pycache__
-data
-model
-slurm-docker-run_perso
-*.slurm
-run.sh
-preproc.py
-run*
-preproc.py
+﻿# .idea
+# __pycache__
+# data
+# model
+# slurm-docker-run_perso
+# *.slurm
+# run.sh
+# preproc.py
+# run*
+# preproc.py
+*.pyc

@@ -22,9 +22,18 @@ from ddpm.trainer import Trainer
 from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
 
+from itertools import product
+import numpy as np
+from torch.profiler import profile, record_function, ProfilerActivity
+# list of parameters available for grid search
+# every parameters must be modified in config_schema.json
+# with "oneOf" to handle 2 types of variable.
+GRIDSEARCH_PARAM = ["batch_size", "lr", "beta_schedule"]
+
 warnings.filterwarnings(
     "ignore", message="This DataLoader will create .* worker processes in total.*")
 gc.collect()
+# Free GPU cache
 torch.cuda.empty_cache()
 
 
@@ -130,7 +139,7 @@ def prepare_dataloader(config, path, csv_file):
         num_workers=cpu_count(),
         sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
                                    drop_last=False) if torch.cuda.device_count() >= 2 else None,
-        drop_last=False
+        drop_last=False,
     )
 
 
@@ -146,6 +155,13 @@ def main_train(config):
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train()
+
+    # Delete all variables to prevent GPU memory leaks
+    del model
+    del optimizer
+    del trainer
+    torch.cuda.empty_cache()
+
     end = time.time()
     total_time = end - start
     logging.debug(f"Training execution time: {total_time} seconds")
@@ -153,10 +169,21 @@ def main_train(config):
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
     config.model_path = os.path.join(config.run_name, "best.pt")
-    model, _ = load_train_objs(config)
-    sampler = Sampler(model, config, dataloader=sample_data)
-    sampler.sample(filename_format="sample_best_{i}.npy")
-    logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+
+    try:
+        model, _ = load_train_objs(config)
+        sampler = Sampler(model, config, dataloader=sample_data)
+        sampler.sample(filename_format="sample_best_{i}.npy")
+        logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+        del sampler
+        del model
+
+    except FileNotFoundError:
+        logging.warning(f"The best model was not created or is not found in {config.run_name}.")
+
+    # Delete all variables to prevent GPU memory leaks
+    del train_data
+    torch.cuda.empty_cache()
 
 
 def main_sample(config):
@@ -175,6 +202,29 @@ def main_sample(config):
     sampler.sample()
 
 
+def cartesian_product(parameters):
+    keys = list(parameters.keys())
+    arrays = [np.asarray(parameters[key]) for key in keys]
+    cartesian_product_array = np.array(np.meshgrid(*arrays)).T.reshape(-1, len(arrays))
+
+    result = []
+
+    for param_values in cartesian_product_array:
+        param_set = {key: convert_to_type(value, parameters[key]) for key, value in zip(keys, param_values)}
+        result.append(param_set)
+
+    return result
+
+def convert_to_type(value, type_list):
+    if isinstance(type_list, list):
+        if isinstance(type_list[0], int) : return int(value)  
+        elif isinstance(type_list[0], float) : return float(value)
+        else : return str(value)
+    else:
+        if isinstance(type_list, int) :return int(value)
+        elif isinstance(type_list, float) : return float(value)
+        else : return str(value)
+ 
 if __name__ == "__main__":
     # Parse command line arguments and load configuration
     parser = argparse.ArgumentParser(description='Deep Learning Training and Testing Script')
@@ -189,33 +239,57 @@ if __name__ == "__main__":
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
+    param_values_list = [
+        config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
+    grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
-    local_rank = get_rank()
+    run_name = config.run_name
 
-    # Configure logging and synchronize processes
-    if not config.use_wandb:
-        os.environ['WANDB_MODE'] = 'disabled'
-    else:
-        os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
-        os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
-    synchronize()
-    setup_logger(config)
-    logger = logging.getLogger(f'logddp_{get_rank_num()}')
+    logging.warning("*"*80)
+    logging.warning("GRIDSEARCH COMBINAISONS :")
+    for el in cartesian_product(grid_search_dict):
+        logging.warning(f"- { el}")
+    logging.warning("*"*80)
 
-    if is_main_gpu():
-        config.save(f"{config.run_name}/config_train.yml")
-        logger.info(config)
-        logger.info(f'Mode {config.mode} selected')
+    for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
-    synchronize()
-    logger.debug(f"Local_rank: {local_rank}")
+        logging.warning("\t"+"-"*80)
+        logging.warning("\t"+f"COMBINAISON : {current_params}")
+        logging.warning("\t"+"-"*80)
 
-    # Execute the main training or sampling function based on the mode
-    if config.mode == 'Train':
-        main_train(config)
-    elif config.mode != 'Train':
-        main_sample(config)
+        if k>0 : config = Config.from_args_and_yaml(args)
+        config._update_from_dict(current_params)
+
+        # if os.path.exists(run_name) and k>0:
+        #     config._next_run_dir(run_name, suffix='_'.join(map(str,list(current_params.values()))))
+
+        local_rank = get_rank()
+
+        # Configure logging and synchronize processes
+        if not config.use_wandb:
+            os.environ['WANDB_MODE'] = 'disabled'
+        else:
+            os.environ['WANDB_MODE'] = 'offline'
+            os.environ['WANDB_CACHE_DIR'] = f"{config.run_name}/WANDB/cache"
+            os.environ['WANDB_DIR'] = f"{config.run_name}/WANDB/"
+        synchronize()
+        setup_logger(config)
+        logger = logging.getLogger(f'logddp_{get_rank_num()}')
+
+        if is_main_gpu():
+            config.save(f"{config.run_name}/config_train.yml")
+            logger.info(config)
+            logger.info(f'Mode {config.mode} selected')
+
+        synchronize()
+        logger.debug(f"Local_rank: {local_rank}")
+
+        # Execute the main training or sampling function based on the mode
+        if config.mode == 'Train':
+            main_train(config)
+        elif config.mode != 'Train':
+            main_sample(config)
+
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():

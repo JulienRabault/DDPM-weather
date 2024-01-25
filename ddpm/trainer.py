@@ -63,6 +63,12 @@ class Trainer(Ddpm_base):
                 batch[key] = batch[key].to(self.gpu_id)
         return batch
 
+    def _purge_batch_memory(self, batch):
+        for key in batch.keys():
+            if torch.is_tensor(batch[key]):
+                batch[key] = batch[key].detach().cpu()
+        del batch
+
     def _run_batch(self, batch):
         """
         Run a single training batch.
@@ -75,7 +81,12 @@ class Trainer(Ddpm_base):
         loss = self.model(**batch)
         loss.backward()
         self.optimizer.step()
-        return loss.item()
+        loss = loss.detach().cpu()
+        # Delete all variables to prevent GPU memory leaks, and empty GPU cache
+        self._purge_batch_memory(batch)
+        torch.cuda.empty_cache() # increase the computing time of ~10% : the price to prevent leakage
+
+        return loss
 
     def _run_epoch(self, epoch):
         """
@@ -98,10 +109,12 @@ class Trainer(Ddpm_base):
             batch_prep = self._prepare_batch(batch, needs_keys)
             loss = self._run_batch(batch_prep)
             total_loss += loss
+            
             if self.config.scheduler:
                 self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
+
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
@@ -116,6 +129,7 @@ class Trainer(Ddpm_base):
 
         if epoch % self.config.any_time == 0.0:
             synchronize()
+
 
         return total_loss / len(self.dataloader)
 
@@ -176,6 +190,7 @@ class Trainer(Ddpm_base):
         Returns:
             None
         """
+
         filename_format = "sample_epoch{epoch}_{i}.npy"
         if is_main_gpu():
             self._init_wandb()
@@ -210,6 +225,12 @@ class Trainer(Ddpm_base):
             self.logger.info(
                 f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
                 f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
+        
+        # Delete all variables to prevent GPU memory leaks, and empty GPU cache
+        del self.model
+        del self.dataloader
+        torch.cuda.empty_cache()
+
 
     def sample_train(self, ep=None, nb_img=4, condition=None):
         """

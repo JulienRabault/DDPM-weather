@@ -1,0 +1,15 @@
+Bootstrap: docker
+From: pytorch/pytorch:2.1.2-cuda12.1-cudnn8-devel
+Stage: build
+
+%environment
+    DDPM_SRC=/DDPM
+
+%files
+    requirements.txt /DDPM/requirements.txt
+
+%post
+    apt-get update -y
+    DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata libglib2.0-0 libsm6 libxrender1 libfontconfig1 libxtst6
+    cd /DDPM
+    pip install -r requirements.txt
