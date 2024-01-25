@@ -188,6 +188,21 @@
       ],
       "default": 0.0005
     },
+    "dim": {
+      "type": "integer",
+      "default": 64,
+      "description": "dim of Unet"
+    },
+    "dim_mults": {
+      "type": "array",
+      "default": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "description": "dim_mults for Unet"
+    },
     "adam_betas": {
       "type": "array",
       "default": [
