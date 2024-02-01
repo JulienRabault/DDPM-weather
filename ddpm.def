@@ -1,15 +1,16 @@
 Bootstrap: docker
-From: pytorch/pytorch:2.1.2-cuda12.1-cudnn8-devel
+From: ubuntu:jammy-20240111
 Stage: build
 
 %environment
-    DDPM_SRC=/DDPM
+    DDPM_SRC=/ddpm
 
 %files
-    requirements.txt /DDPM/requirements.txt
+    requirements.txt /ddpm/requirements.txt
 
 %post
     apt-get update -y
-    DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install tzdata libglib2.0-0 libsm6 libxrender1 libfontconfig1 libxtst6
-    cd /DDPM
+    apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -y install python3 python3-pip tzdata libglib2.0-0 libsm6 libxrender1 libfontconfig1 libxtst6    
+    cd /ddpm
     pip install -r requirements.txt
+    pip cache purge
