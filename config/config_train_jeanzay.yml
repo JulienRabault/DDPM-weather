@@ -13,7 +13,7 @@
   "random_noise": true,
 
   # Data parameters
-  "data_dir": "$ALL_CCFRWORK/commun/IS_1_1.0_0_0_0_0_0_256_large_lt_done/",
+  "data_dir": $DATA_DIR,
   "csv_file": "Large_lt_train_labels_1_ens.csv",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],

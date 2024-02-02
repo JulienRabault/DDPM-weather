@@ -1,1 +1,0 @@
-python -m torch.distributed.run --standalone --nproc\_per\_node gpu main.py --yaml\_path $@

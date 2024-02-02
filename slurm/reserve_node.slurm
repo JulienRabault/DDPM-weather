@@ -13,4 +13,6 @@
 #SBATCH --account=woz@v100      
 #SBATCH -C v100-32g
 
-$WORK/DDPM-weather/start_singularity.sh $@
+source .env
+
+$SCRIPT_DIR/start_singularity.sh $@
