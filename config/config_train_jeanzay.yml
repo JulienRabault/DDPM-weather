@@ -13,7 +13,7 @@
   "random_noise": true,
 
   # Data parameters
-  "data_dir": $DATA_DIR,
+  "data_dir": /ddpm/data/,
   "csv_file": "Large_lt_train_labels_1_ens.csv",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],
@@ -22,7 +22,7 @@
   "image_size": 256,
   "mean_file": "stat_files_Massif_Central/mean_rr.npy",
   "max_file": "stat_files_Massif_Central/std_rr.npy",
-  "guiding_col": "ensemble_id",
+  # "guiding_col": "ensemble_id",
 
   # Model parameters
   "scheduler": true,
