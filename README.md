@@ -192,6 +192,19 @@ attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans 
 ```
 
 Si des valeur ne sont pas spécifiées dans le fichier de configuration, elles seront remplacées par les valeurs par défaut ou par la surcharge lors de l'appel du fichier `main.py`.
+
+
+## Singularity & slurm
+
+Installation de *singularity* en téléchargeant le paquet ici : https://github.com/sylabs/singularity/releases/
+
+Construit l'image avec `ddpm.def` : `singularity build --nv ddpm.sif ddpm.def`
+
+Entre dans le contener singularity en montant les chemins du code source et des données : `singularity shell --nv --bind .:/ddpm <data_dir>:/data ddpm.sif` 
+et dans `/ddpm/` lance ton entrainement suivant les instructions ci dessus. Ne pas oublier de redéfinir le chemin des données dans `/data/` dans la config yaml.    
+
+Pour une réservation slurm, lancer la réservation avec `sbatch slurm/reserve_node.slurm config/config_train_jeanzay.yml`. Ne pas oublier de changer ci besoin le `slurm/.env` pour monter les bons chemin de dossiers de log, de données, de sources et de l'image singularity .sif.   
+
 ## Contact
 
 Pour toute question, vous pouvez me contacter à l'adresse suivante : `julien.rabault@irit.fr`
