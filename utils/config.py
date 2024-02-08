@@ -111,6 +111,7 @@ class Config:
             paths.append(f"{self.run_name}/WANDB/")
             paths.append(f"{self.run_name}/WANDB/cache")
         self._next_run_dir(paths)
+        
         return
 
     def to_dict(self):

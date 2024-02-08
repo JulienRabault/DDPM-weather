@@ -245,9 +245,6 @@ class Trainer(Ddpm_base):
                         avg_loss,
                     )
 
-                print("avg_loss", type(avg_loss), avg_loss, avg_loss.item())
-                print("lr", type(self.config.lr), self.config.lr)
-
                 log = {
                     "avg_loss": avg_loss.item(),
                     "lr": (

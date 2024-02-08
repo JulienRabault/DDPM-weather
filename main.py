@@ -304,7 +304,7 @@ if __name__ == "__main__":
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
-        with mlflow.start_run(nested=True):
+        with mlflow.start_run(nested=True, run_name=config.run_name):
             if config.multiple:
                 logging.warning("\t" + "-" * 80)
                 logging.warning("\t" + f"COMBINAISON : {current_params}")
