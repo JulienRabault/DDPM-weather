@@ -85,9 +85,10 @@ class Trainer(Ddpm_base):
         loss.backward()
         self.optimizer.step()
         loss = loss.detach().cpu()
-        # Delete all variables to prevent GPU memory leaks, and empty GPU cache
-        self._purge_batch_memory(batch)
-        torch.cuda.empty_cache()  # increase the computing time of ~10% : the price to prevent leakage
+        if self.config.multiple:
+            # Delete all variables to prevent GPU memory leaks, and empty GPU cache
+            self._purge_batch_memory(batch)
+            torch.cuda.empty_cache()  # increase the computing time of ~10% : the price to prevent leakage
 
         return loss
 
@@ -315,8 +316,7 @@ class Trainer(Ddpm_base):
             return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
-        else:
-            mlflow.log_metrics(log_dict)
+        mlflow.log_metrics(log_dict)
 
         csv_filename = os.path.join(f"{self.config.run_name}", "logs_train.csv")
         file_exists = Path(csv_filename).is_file()

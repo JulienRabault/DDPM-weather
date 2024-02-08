@@ -8,8 +8,6 @@ import yaml
 from utils.distributed import is_main_gpu, get_rank_num, synchronize
 import datetime
 
-CONFIG_SCHEMA_PATH = "utils/config_schema.json"
-
 
 def load_yaml(yaml_path):
     with open(yaml_path, "r") as yaml_file:
@@ -30,8 +28,9 @@ TYPE_MAPPER = {
 
 
 class Config:
-    def __init__(self, args):
+    def __init__(self, args, schema_path):
         # Load YAML configuration file and initialize logger
+        self.schema_path = schema_path
         yaml_config = load_yaml(args.yaml_path)
         self._update_from_args(args)
         for prop, value in yaml_config.items():
@@ -61,7 +60,7 @@ class Config:
 
     def _validate_config(self):
         # Validate the configuration against a JSON schema
-        with open(CONFIG_SCHEMA_PATH, "r") as schema_file:
+        with open(self.schema_path, "r") as schema_file:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
         # Check specific conditions for certain configuration values
@@ -136,9 +135,9 @@ class Config:
             yaml.dump(self.to_dict(), f)
 
     @classmethod
-    def from_args_and_yaml(cls, args):
+    def from_args_and_yaml(cls, args, schema_path):
         # Create a Config object from command line arguments and a YAML file
-        config = cls(args)
+        config = cls(args, schema_path)
         return config
 
     @classmethod

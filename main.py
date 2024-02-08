@@ -129,7 +129,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config, path, csv_file):
+def prepare_dataloader(config, path, csv_file, num_workers=None):
     """
     Prepare the data loader.
     Args:
@@ -145,7 +145,7 @@ def prepare_dataloader(config, path, csv_file):
         batch_size=config.batch_size,
         pin_memory=True,
         shuffle=not torch.cuda.device_count() >= 2,
-        num_workers=cpu_count(),
+        num_workers=cpu_count() if num_workers is None else num_workers,
         sampler=(
             DistributedSampler(
                 train_set, rank=get_rank_num(), shuffle=False, drop_last=False
@@ -166,7 +166,9 @@ def main_train(config):
     # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
     train_data = prepare_dataloader(
-        config, path=config.data_dir, csv_file=config.csv_file
+        config, path=config.data_dir,
+        csv_file=config.csv_file,
+        num_workers=config.num_workers if "num_workers" in config.to_dict() else None
     )
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
@@ -272,45 +274,47 @@ if __name__ == "__main__":
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")
+    parser.add_argument("-m", "--multiple", action="store_true", help="multiple sequential runs")
+    args = parser.parse_args()
 
-    with open("utils/config_schema.json", "r") as schema_file:
+    if args.multiple:
+        schema_path = "utils/config_schema_multiple_runs.json"
+    else:
+        schema_path = "utils/config_schema.json"
+    with open(schema_path, "r") as schema_file:
         schema = json.load(schema_file)
 
     ddp_setup()
 
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
-    config = Config.from_args_and_yaml(args)
+
+    config = Config.from_args_and_yaml(args, schema_path)
     param_values_list = [config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
     grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
     run_name = config.run_name
 
-    logging.warning("*" * 80)
-    logging.warning("GRIDSEARCH COMBINAISONS :")
-    for el in cartesian_product(grid_search_dict):
-        logging.warning(f"- { el}")
-    logging.warning("*" * 80)
+    if config.multiple:
+        logging.warning("*" * 80)
+        logging.warning("GRIDSEARCH COMBINAISONS :")
+        for el in cartesian_product(grid_search_dict):
+            logging.warning(f"- { el}")
+        logging.warning("*" * 80)
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
         with mlflow.start_run(nested=True):
-
-            logging.warning("\t" + "-" * 80)
-            logging.warning("\t" + f"COMBINAISON : {current_params}")
-            logging.warning("\t" + "-" * 80)
+            if config.multiple:
+                logging.warning("\t" + "-" * 80)
+                logging.warning("\t" + f"COMBINAISON : {current_params}")
+                logging.warning("\t" + "-" * 80)
 
             if k > 0:
-                config = Config.from_args_and_yaml(args)
+                config = Config.from_args_and_yaml(args, schema_path)
             config._update_from_dict(current_params)
 
-            print("config", type(config), type(config.to_dict()), config.to_dict())
-
             mlflow.log_params(config.to_dict())
-
-            # if os.path.exists(run_name) and k>0:
-            #     config._next_run_dir(run_name, suffix='_'.join(map(str,list(current_params.values()))))
-
             local_rank = get_rank()
 
             # Configure logging and synchronize processes

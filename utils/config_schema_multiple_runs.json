@@ -15,9 +15,24 @@
       "description": "Name for the training run"
     },
     "batch_size": {
-      "type": "integer",
-      "default": 32,
-      "description": "Batch size for training or sampling"
+      "oneOf": [
+        {
+          "type": "integer",
+          "default": 32,
+          "description": "Batch size for training or sampling"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "default": [
+            32
+          ],
+          "description": "Batch size for training or sampling in gridsearch"
+        }
+      ],
+      "default": 32
     },
     "any_time": {
       "type": "integer",
@@ -154,9 +169,24 @@
       "description": "Resume training from a checkpoint"
     },
     "lr": {
-      "type": "number",
-      "default": 0.0005,
-      "description": "Learning rate for the optimizer"
+      "oneOf": [
+        {
+          "type": "number",
+          "default": 0.0005,
+          "description": "Learning rate for the optimizer"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "default": [
+            0.0005
+          ],
+          "description": "Learning rates for the optimizer in gridsearch"
+        }
+      ],
+      "default": 0.0005
     },
     "dim": {
       "type": "integer",
@@ -197,13 +227,31 @@
       "description": "Scale factor for guidance loss in guided sampling"
     },
     "beta_schedule": {
-      "type": "string",
-      "enum": [
-        "cosine",
-        "linear"
-      ],
-      "default": "linear",
-      "description": "Type of beta schedule (cosine or linear)"
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "cosine",
+            "linear"
+          ],
+          "default": "linear",
+          "description": "Type of beta schedule (cosine or linear)"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "cosine",
+              "linear"
+            ]
+          },
+          "default": [
+            "cosine"
+          ],
+          "description": "List of types for beta schedule"
+        }
+      ]
     },
     "wandbproject": {
       "type": "string",
