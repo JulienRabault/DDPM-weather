@@ -13,7 +13,7 @@
   "random_noise": true,
 
   # Data parameters
-  "data_dir": "$DATA_DIR",
+  "data_dir": "../data/small_256/",
   "csv_file": "IS_method_labels.csv",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],
@@ -34,6 +34,6 @@
 
   # Tracking parameters
   "wandbproject": "your_wandb_project",
-  "use_wandb": true,
+  "use_wandb": false,
   "entityWDB": "your_entity"
 }

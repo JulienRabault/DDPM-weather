@@ -11,6 +11,7 @@ from tqdm import tqdm
 
 from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu, synchronize
+import mlflow
 
 
 class Trainer(Ddpm_base):
@@ -27,18 +28,20 @@ class Trainer(Ddpm_base):
         super().__init__(model, config, dataloader)
         self.optimizer = optimizer
         self.epochs_run = 0
-        self.best_loss = float('inf')
+        self.best_loss = float("inf")
         self.guided_diffusion = self.config.guiding_col is not None
         if self.config.scheduler:
             # Use a learning rate scheduler if specified in the configuration
             self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer, max_lr=self.config.lr,
+                optimizer,
+                max_lr=self.config.lr,
                 epochs=self.config.scheduler_epoch,
                 steps_per_epoch=len(self.dataloader),
                 anneal_strategy="cos",
                 pct_start=0.1,
                 div_factor=15.0,
-                final_div_factor=1500.0)
+                final_div_factor=1500.0,
+            )
         else:
             self.scheduler = None
 
@@ -84,7 +87,7 @@ class Trainer(Ddpm_base):
         loss = loss.detach().cpu()
         # Delete all variables to prevent GPU memory leaks, and empty GPU cache
         self._purge_batch_memory(batch)
-        torch.cuda.empty_cache() # increase the computing time of ~10% : the price to prevent leakage
+        torch.cuda.empty_cache()  # increase the computing time of ~10% : the price to prevent leakage
 
         return loss
 
@@ -101,15 +104,21 @@ class Trainer(Ddpm_base):
             self.dataloader.sampler.set_epoch(epoch)
         total_loss = 0
         # tqdm provides a progress bar during training
-        loop = tqdm(enumerate(self.dataloader), total=iters,
-                    desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}", unit="batch",
-                    leave=False, postfix="", disable=not is_main_gpu())
+        loop = tqdm(
+            enumerate(self.dataloader),
+            total=iters,
+            desc=f"Epoch {epoch}/{self.config.epochs + self.epochs_run}",
+            unit="batch",
+            leave=False,
+            postfix="",
+            disable=not is_main_gpu(),
+        )
         for i, batch in loop:
-            needs_keys = ['img'] + (['condition'] if self.guided_diffusion else [])
+            needs_keys = ["img"] + (["condition"] if self.guided_diffusion else [])
             batch_prep = self._prepare_batch(batch, needs_keys)
             loss = self._run_batch(batch_prep)
             total_loss += loss
-            
+
             if self.config.scheduler:
                 self.scheduler.step()
             if is_main_gpu():
@@ -118,18 +127,20 @@ class Trainer(Ddpm_base):
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
-            f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}")
+            f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}"
+        )
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
             condition = None
             if self.guided_diffusion:
-                condition = self._prepare_batch(next(iter(self.dataloader)), ['condition'])
-                condition = condition['condition'][:self.config.n_sample]
+                condition = self._prepare_batch(
+                    next(iter(self.dataloader)), ["condition"]
+                )
+                condition = condition["condition"][: self.config.n_sample]
             self.sample_train(str(epoch), self.config.n_sample, condition)
 
         if epoch % self.config.any_time == 0.0:
             synchronize()
-
 
         return total_loss / len(self.dataloader)
 
@@ -146,22 +157,23 @@ class Trainer(Ddpm_base):
         snapshot = {
             "MODEL_STATE": self.model.state_dict(),
             "EPOCHS_RUN": epoch,
-            'OPTIMIZER_STATE': self.optimizer.state_dict(),
-            'BEST_LOSS': loss,
-            'TIMESTAMP': self.timesteps,
-            'GUIDED_DIFFUSION': self.guided_diffusion,
-            'DATA': {
-                'STDS': self.stds,
-                'MEANS': self.means,
-                'V_IDX': self.config.var_indexes,
-                'CROP': self.config.crop,
-            }
+            "OPTIMIZER_STATE": self.optimizer.state_dict(),
+            "BEST_LOSS": loss,
+            "TIMESTAMP": self.timesteps,
+            "GUIDED_DIFFUSION": self.guided_diffusion,
+            "DATA": {
+                "STDS": self.stds,
+                "MEANS": self.means,
+                "V_IDX": self.config.var_indexes,
+                "CROP": self.config.crop,
+            },
         }
         if self.config.scheduler:
             snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
         torch.save(snapshot, path)
         self.logger.info(
-            f"Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}")
+            f"Epoch {epoch} | Training snapshot saved at {path} | Loss: {loss}"
+        )
 
     def _init_wandb(self):
         """
@@ -174,15 +186,22 @@ class Trainer(Ddpm_base):
 
         t = time.strftime("%d-%m-%y_%H-%M", time.localtime(time.time()))
         self.logger.debug("WANDB initialized")
-        wandb.init(project=self.config.wandbproject, resume="auto" if self.config.resume else None,
-                   mode=os.environ['WANDB_MODE'],
-                   entity=self.config.entityWDB,
-                   name=f"{self.config.run_name}_{t}/",
-                   config={**vars(self.config), **{"optimizer": self.optimizer.__class__,
-                                                   "scheduler": self.scheduler.__class__,
-                                                   "lr_base": self.optimizer.param_groups[0]["lr"],
-                                                   "weight_decay": self.optimizer.param_groups[0][
-                                                       "weight_decay"], }})
+        wandb.init(
+            project=self.config.wandbproject,
+            resume="auto" if self.config.resume else None,
+            mode=os.environ["WANDB_MODE"],
+            entity=self.config.entityWDB,
+            name=f"{self.config.run_name}_{t}/",
+            config={
+                **vars(self.config),
+                **{
+                    "optimizer": self.optimizer.__class__,
+                    "scheduler": self.scheduler.__class__,
+                    "lr_base": self.optimizer.param_groups[0]["lr"],
+                    "weight_decay": self.optimizer.param_groups[0]["weight_decay"],
+                },
+            },
+        )
 
     def train(self):
         """
@@ -194,8 +213,12 @@ class Trainer(Ddpm_base):
         filename_format = "sample_epoch{epoch}_{i}.npy"
         if is_main_gpu():
             self._init_wandb()
-            loop = tqdm(range(self.epochs_run, self.config.epochs + self.epochs_run),
-                        desc=f"Training...", unit="epoch", postfix="")
+            loop = tqdm(
+                range(self.epochs_run, self.config.epochs + self.epochs_run),
+                desc=f"Training...",
+                unit="epoch",
+                postfix="",
+            )
         else:
             loop = range(self.epochs_run, self.config.epochs + self.epochs_run)
 
@@ -203,34 +226,51 @@ class Trainer(Ddpm_base):
             avg_loss = self._run_epoch(epoch)
             if is_main_gpu():
                 loop.set_postfix_str(
-                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}")
+                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}"
+                )
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", "best.pt"), avg_loss)
+                    self._save_snapshot(
+                        epoch,
+                        os.path.join(f"{self.config.run_name}", "best.pt"),
+                        avg_loss,
+                    )
 
                 if epoch % self.config.any_time == 0.0:
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", f"save_{epoch}.pt"), avg_loss)
+                    self._save_snapshot(
+                        epoch,
+                        os.path.join(f"{self.config.run_name}", f"save_{epoch}.pt"),
+                        avg_loss,
+                    )
 
-                log = {"avg_loss": avg_loss,
-                       "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
+                print("avg_loss", type(avg_loss), avg_loss, avg_loss.item())
+                print("lr", type(self.config.lr), self.config.lr)
+
+                log = {
+                    "avg_loss": avg_loss.item(),
+                    "lr": (
+                        self.scheduler.get_last_lr()[0]
+                        if self.config.scheduler
+                        else self.config.lr
+                    ),
+                }
                 self._log(epoch, log)
-                self._save_snapshot(epoch, os.path.join(
-                    f"{self.config.run_name}", "last.pt"), avg_loss)
+                self._save_snapshot(
+                    epoch, os.path.join(f"{self.config.run_name}", "last.pt"), avg_loss
+                )
 
         if is_main_gpu():
             wandb.finish()
             self.logger.info(
                 f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
-                f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
-        
+                f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}"
+            )
+
         # Delete all variables to prevent GPU memory leaks, and empty GPU cache
         del self.model
         del self.dataloader
         torch.cuda.empty_cache()
-
 
     def sample_train(self, ep=None, nb_img=4, condition=None):
         """
@@ -247,7 +287,8 @@ class Trainer(Ddpm_base):
         if nb_img > 6:
             # Use a warning if sampling more than 6 images (might be time-consuming)
             Warning(
-                "Sampling more than 6 images may take a long time because sampling uses only the main GPU.")
+                "Sampling more than 6 images may take a long time because sampling uses only the main GPU."
+            )
 
         self.logger.info(f"Sampling {nb_img} images...")
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
@@ -258,7 +299,8 @@ class Trainer(Ddpm_base):
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.run_name}/samples/")
+            f"Sampling done. Images saved in {self.config.run_name}/samples/"
+        )
 
     def _log(self, epoch, log_dict):
         """
@@ -273,12 +315,14 @@ class Trainer(Ddpm_base):
             return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
-        csv_filename = os.path.join(
-            f"{self.config.run_name}", "logs_train.csv")
+        else:
+            mlflow.log_metrics(log_dict)
+
+        csv_filename = os.path.join(f"{self.config.run_name}", "logs_train.csv")
         file_exists = Path(csv_filename).is_file()
-        with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
-            fieldnames = ['epoch'] + list(log_dict.keys())
+        with open(csv_filename, "a" if file_exists else "w", newline="") as csvfile:
+            fieldnames = ["epoch"] + list(log_dict.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             if not file_exists:
                 writer.writeheader()
-            writer.writerow({**{'epoch': epoch}, **log_dict})
+            writer.writerow({**{"epoch": epoch}, **log_dict})

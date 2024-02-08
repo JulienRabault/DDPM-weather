@@ -4,8 +4,13 @@ import os
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Process some data.')
-    parser.add_argument('--full_path', type=str, default='../DATA/small_256/IS_method_labels.csv', help='Full path to the CSV file')
+    parser = argparse.ArgumentParser(description="Process some data.")
+    parser.add_argument(
+        "--full_path",
+        type=str,
+        default="../DATA/small_256/IS_method_labels.csv",
+        help="Full path to the CSV file",
+    )
     return parser.parse_args()
 
 
@@ -26,18 +31,19 @@ def process_data(full_path):
         for date in list_dates_unique:  # for each unique date
             for j in range(leadtimemax):  # for each LeadTime between 0 and 7
                 # get idx of all samples with the same date and leadtime
-                idx = df.loc[(df['Date'] == date) & (
-                    df["LeadTime"] == j)].index
+                idx = df.loc[(df["Date"] == date) & (df["LeadTime"] == j)].index
                 # Compute the list of all these samples
-                ensemble_list = df.loc[(df['Date'] == date) & (
-                    df["LeadTime"] == j), "Name"].tolist()
+                ensemble_list = df.loc[
+                    (df["Date"] == date) & (df["LeadTime"] == j), "Name"
+                ].tolist()
                 # affect this whole `ensemble_list` for every samples id the list of list `ensembles`
                 for id in idx:
                     ensembles[id] = ensemble_list
 
                 # only to check if ensembles is good
-                df.loc[(df['Date'] == date) & (
-                    df["LeadTime"] == j), "ensemble_id"] = id_ens
+                df.loc[(df["Date"] == date) & (df["LeadTime"] == j), "ensemble_id"] = (
+                    id_ens
+                )
                 id_ens += 1
 
         print("df", df[["Name", "ensemble_id"]][0:20])
@@ -45,7 +51,7 @@ def process_data(full_path):
         print("ensembles", ensembles[0:20])
 
         if "Unnamed: 0" in df:
-            df = df.drop('Unnamed: 0', axis=1)
+            df = df.drop("Unnamed: 0", axis=1)
 
         # Save to a new file with "_ens" appended to the input file name
         output_file = os.path.splitext(full_path)[0] + "_ens.csv"
@@ -58,16 +64,21 @@ def process_data(full_path):
     else:
 
         if "Unnamed: 0" in df:
-            df = df.drop('Unnamed: 0', axis=1)
+            df = df.drop("Unnamed: 0", axis=1)
 
         df.to_csv(full_path, index=False)
 
         print("df", df)
 
-        group = df.groupby(['ensemble_id']).agg(lambda x: x)
+        group = df.groupby(["ensemble_id"]).agg(lambda x: x)
 
-        print("group", len(group["Name"]), len(
-            group["Name"][0]), group["Name"][0], group["Name"][2000])
+        print(
+            "group",
+            len(group["Name"]),
+            len(group["Name"][0]),
+            group["Name"][0],
+            group["Name"][2000],
+        )
 
 
 def main():

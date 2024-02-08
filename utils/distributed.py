@@ -1,6 +1,7 @@
 import torch
 from torch import distributed as dist
 
+
 def get_rank():
     """
     Get the rank of the current process.
@@ -8,9 +9,9 @@ def get_rank():
         str: 'cpu' if CUDA is not available, 'cuda' if there is a single GPU, or 'cuda:{rank}' for distributed GPUs.
     """
     if not torch.cuda.is_available():
-        return 'cpu'
+        return "cpu"
     if torch.cuda.device_count() < 2:
-        return 'cuda'
+        return "cuda"
     return "cuda:" + str(dist.get_rank())
 
 
