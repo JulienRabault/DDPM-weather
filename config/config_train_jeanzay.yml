@@ -26,8 +26,8 @@
   # "guiding_col": "ensemble_id",
 
   # Model parameters
-  "scheduler": true,
-  "scheduler_epoch": 1,
+  "scheduler": false,
+  "scheduler_epoch": 500,
   "resume": false,
   "epochs": 10,
   "beta_schedule": "linear",
