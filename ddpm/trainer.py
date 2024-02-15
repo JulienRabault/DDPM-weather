@@ -115,7 +115,9 @@ class Trainer(Ddpm_base):
             disable=not is_main_gpu(),
         )
         for i, batch in loop:
-            needs_keys = ["img"] + (["condition"] if self.guided_diffusion else [])
+            needs_keys = ["img"] + (
+                ["condition"] if self.guided_diffusion else []
+            )
             batch_prep = self._prepare_batch(batch, needs_keys)
             loss = self._run_batch(batch_prep)
             total_loss += loss
@@ -199,7 +201,9 @@ class Trainer(Ddpm_base):
                     "optimizer": self.optimizer.__class__,
                     "scheduler": self.scheduler.__class__,
                     "lr_base": self.optimizer.param_groups[0]["lr"],
-                    "weight_decay": self.optimizer.param_groups[0]["weight_decay"],
+                    "weight_decay": self.optimizer.param_groups[0][
+                        "weight_decay"
+                    ],
                 },
             },
         )
@@ -241,7 +245,9 @@ class Trainer(Ddpm_base):
                 if epoch % self.config.any_time == 0.0:
                     self._save_snapshot(
                         epoch,
-                        os.path.join(f"{self.config.run_name}", f"save_{epoch}.pt"),
+                        os.path.join(
+                            f"{self.config.run_name}", f"save_{epoch}.pt"
+                        ),
                         avg_loss,
                     )
 
@@ -255,7 +261,9 @@ class Trainer(Ddpm_base):
                 }
                 self._log(epoch, log)
                 self._save_snapshot(
-                    epoch, os.path.join(f"{self.config.run_name}", "last.pt"), avg_loss
+                    epoch,
+                    os.path.join(f"{self.config.run_name}", "last.pt"),
+                    avg_loss,
                 )
 
         if is_main_gpu():
@@ -291,7 +299,11 @@ class Trainer(Ddpm_base):
         self.logger.info(f"Sampling {nb_img} images...")
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
         for i, img in enumerate(samples):
-            filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
+            filename = (
+                f"_sample_{ep}_{i}.npy"
+                if ep is not None
+                else f"_sample_{i}.npy"
+            )
             save_path = os.path.join(self.config.run_name, "samples", filename)
             np.save(save_path, img)
         if self.config.plot:
@@ -313,11 +325,15 @@ class Trainer(Ddpm_base):
             return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
-        mlflow.log_metrics(log_dict)
+        mlflow.log_metrics(log_dict, step=epoch)
 
-        csv_filename = os.path.join(f"{self.config.run_name}", "logs_train.csv")
+        csv_filename = os.path.join(
+            f"{self.config.run_name}", "logs_train.csv"
+        )
         file_exists = Path(csv_filename).is_file()
-        with open(csv_filename, "a" if file_exists else "w", newline="") as csvfile:
+        with open(
+            csv_filename, "a" if file_exists else "w", newline=""
+        ) as csvfile:
             fieldnames = ["epoch"] + list(log_dict.keys())
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             if not file_exists:
