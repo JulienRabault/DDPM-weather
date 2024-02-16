@@ -31,7 +31,7 @@ GRIDSEARCH_PARAM = ["batch_size", "lr", "beta_schedule"]
 
 warnings.filterwarnings(
     "ignore",
-    message="This DataLoader will create .* worker processes in total.*"
+    message="This DataLoader will create .* worker processes in total.*",
 )
 gc.collect()
 # Free GPU cache
@@ -166,12 +166,17 @@ def main_train(config):
     # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
     train_data = prepare_dataloader(
-        config, path=config.data_dir,
+        config,
+        path=config.data_dir,
         csv_file=config.csv_file,
-        num_workers=config.num_workers if "num_workers" in config.to_dict() else None
+        num_workers=(
+            config.num_workers if "num_workers" in config.to_dict() else None
+        ),
     )
     start = time.time()
-    trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
+    trainer = Trainer(
+        model, config, dataloader=train_data, optimizer=optimizer
+    )
     trainer.train()
 
     # Delete all variables to prevent GPU memory leaks
@@ -229,7 +234,9 @@ def main_sample(config):
 def cartesian_product(parameters):
     keys = list(parameters.keys())
     arrays = [np.asarray(parameters[key]) for key in keys]
-    cartesian_product_array = np.array(np.meshgrid(*arrays)).T.reshape(-1, len(arrays))
+    cartesian_product_array = np.array(np.meshgrid(*arrays)).T.reshape(
+        -1, len(arrays)
+    )
 
     result = []
 
@@ -274,8 +281,13 @@ if __name__ == "__main__":
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")
-    parser.add_argument("-m", "--multiple", action="store_true", help="multiple sequential runs")
-    args = parser.parse_args()
+    parser.add_argument(
+        "-m",
+        "--multiple",
+        action="store_true",
+        help="multiple sequential runs",
+    )
+    args, unknown = parser.parse_known_args()
 
     if args.multiple:
         schema_path = "utils/config_schema_multiple_runs.json"
@@ -322,7 +334,9 @@ if __name__ == "__main__":
                 os.environ["WANDB_MODE"] = "disabled"
             else:
                 os.environ["WANDB_MODE"] = "offline"
-                os.environ["WANDB_CACHE_DIR"] = f"{config.run_name}/WANDB/cache"
+                os.environ["WANDB_CACHE_DIR"] = (
+                    f"{config.run_name}/WANDB/cache"
+                )
                 os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
             synchronize()
             setup_logger(config)

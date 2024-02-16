@@ -124,13 +124,11 @@ Si vous voulez utiliser le scheduler, il faut utiliser `scheduler` et `scheduler
 
 1. Entraîner le modèle :
 
-
 ```python
 python main.py --yaml_path config_train.yml --batch_size 64 --lr 0.0001
 ```
 
 2. Tester (Sample) le modèle :
-
 
 ```python
 python main.py --yaml_path config_sample.yml
@@ -138,7 +136,7 @@ python main.py --yaml_path config_sample.yml
 
 3. Entraînement avec plusieurs GPUs 
 ```python
-python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path config_sample.yml
+python torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path config_sample.yml
 ```
 
 4. Reprendre l'entraînement à partir d'un point de contrôle :
@@ -147,6 +145,17 @@ python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml
 python main.py --yaml_path config_train.yml --model_path checkpoints/checkpoint.pt --resume
 ```
 attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans le fichier yaml.
+
+
+5. plusieur entrainements en séquentiel :
+
+```python
+python main.py -m --yaml_path config_sample.yml
+```
+
+avec dans le fichier de config yaml : 
+```"batch_size": [4,8,16],```
+pour tester plusieur configuration de batch_size par exemple. 
 
 ### Exemple de fichier de configuration YAML :
 
