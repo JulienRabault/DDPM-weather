@@ -2,9 +2,9 @@
   # General parameters
   "mode": "Train",
   "run_name": "run_train",
-  "batch_size": 1,
+  "batch_size": 16,
   "any_time": 25,
-  "num_workers": 4,
+
   # Sampling parameters
   "ddim_timesteps": 50,
   "plot": true,
@@ -13,28 +13,30 @@
   "random_noise": true,
 
   # Data parameters
-  "data_dir": "../data/small_256/",
-  "csv_file": "IS_method_labels.csv",
+  "data_dir": /ddpm/data/,
+  "csv_file": "Large_lt_train_labels_1_ens.csv",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],
-  "crop": [ 0,256,0,256 ],
+  "crop": [0,256,0,256 ],
   "invert_norm": false,
   "image_size": 256,
-  "mean_file": "mean_with_orog.npy",
-  "max_file": "max_with_orog.npy",
-  "guiding_col": "ensemble_id",
+  "mean_file": "stat_files_Massif_Central/mean_rr.npy",
+  "max_file": "stat_files_Massif_Central/std_rr.npy",
+  "num_workers": 16,
+  # "guiding_col": "ensemble_id",
 
   # Model parameters
   "scheduler": false,
-  "scheduler_epoch": 1,
+  "scheduler_epoch": 500,
   "resume": false,
-  "epochs": 10,
+  "epochs": 1000,
   "beta_schedule": "linear",
-  "lr": 0.0001,
-
+  "lr": 0.00001,
+  "dim": 64,
+  "dim_mults": [1, 2, 4, 8],
+  
   # Tracking parameters
-  "use_mlflow": true,
   "wandbproject": "your_wandb_project",
-  "use_wandb": false,
+  "use_wandb": true,
   "entityWDB": "your_entity"
 }
