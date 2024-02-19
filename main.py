@@ -130,13 +130,12 @@ def prepare_dataloader(config, path, csv_file):
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
     train_set = dataSet_Handler.ISDataset(config, path, csv_file)
-
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
         pin_memory=True,
         shuffle=not torch.cuda.device_count() >= 2,
-        num_workers=cpu_count(),
+        num_workers=config.num_workers,
         sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
                                    drop_last=False) if torch.cuda.device_count() >= 2 else None,
         drop_last=False,
