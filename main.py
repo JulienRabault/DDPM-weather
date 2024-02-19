@@ -287,7 +287,7 @@ if __name__ == "__main__":
         action="store_true",
         help="multiple sequential runs",
     )
-    args, unknown = parser.parse_known_args()
+    args, modified_args = parser.parse_known_args()
 
     if args.multiple:
         schema_path = "utils/config_schema_multiple_runs.json"
@@ -299,9 +299,9 @@ if __name__ == "__main__":
     ddp_setup()
 
     Config.create_arguments(parser, schema)
-    args = parser.parse_args()
+    default_args = parser.parse_args()
 
-    config = Config.from_args_and_yaml(args, schema_path)
+    config = Config.from_args_and_yaml(default_args, schema_path, modified_args)
     param_values_list = [config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
     grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 

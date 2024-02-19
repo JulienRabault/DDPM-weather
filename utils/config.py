@@ -24,17 +24,19 @@ TYPE_MAPPER = {
     "array": list,
     "list": list,
     "float": float,
+    "dict": dict,
+    "number": float,
 }
 
 
 class Config:
-    def __init__(self, args, schema_path):
+    def __init__(self, args, schema_path, modified_args):
         # Load YAML configuration file and initialize logger
         self.schema_path = schema_path
-        yaml_config = load_yaml(args.yaml_path)
+        # default values of the config
         self._update_from_args(args)
-        for prop, value in yaml_config.items():
-            setattr(self, prop, value)
+        self._update_from_config(args.yaml_path, overload=modified_args[::2])
+
         self.logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
         self._validate_config()
@@ -50,6 +52,8 @@ class Config:
 
     def _update_from_args(self, args):
         # Update configuration attributes from command line arguments
+        logging.debug(f"Updating configuration from command line arguments: {args}")
+        logging.debug(f"Schema path: {self.schema_path}")
         for prop, value in args.__dict__.items():
             setattr(self, prop, value)
 
@@ -136,9 +140,9 @@ class Config:
             yaml.dump(self.to_dict(), f)
 
     @classmethod
-    def from_args_and_yaml(cls, args, schema_path):
+    def from_args_and_yaml(cls, args, schema_path, modified_args):
         # Create a Config object from command line arguments and a YAML file
-        config = cls(args, schema_path)
+        config = cls(args, schema_path, modified_args)
         return config
 
     @classmethod
@@ -207,3 +211,14 @@ class Config:
             synchronize()
             for path in paths:
                 os.makedirs(path, exist_ok=True)
+
+    def _update_from_config(self, yaml_path, overload:list):
+        yaml_config = load_yaml(yaml_path)
+        overload = [s.lstrip('-') for s in overload]
+        for key, value in yaml_config.items():
+            if key not in overload:
+                setattr(self, key, value)
+            else:
+                logging.warning(
+                    f"Overloading {key} to {getattr(self, key)}"
+                )
