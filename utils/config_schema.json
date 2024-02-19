@@ -96,6 +96,11 @@
       "default": null,
       "description": "Directory containing the input data"
     },
+    "output_dir": {
+      "type": "string",
+      "default": "",
+      "description": "Directory where the output data is saved"
+    },
     "csv_file": {
       "type": [
         "string",
@@ -142,16 +147,6 @@
       "type": "integer",
       "default": 128,
       "description": "Size of the input image"
-    },
-    "mean_file": {
-      "type": "string",
-      "default": "mean_file.npy",
-      "description": "Path to the file containing mean values for normalization"
-    },
-    "max_file": {
-      "type": "string",
-      "default": "max_file.npy",
-      "description": "Path to the file containing maximum values for normalization"
     },
     "scheduler": {
       "type": "boolean",
@@ -232,6 +227,11 @@
           "description": "List of types for beta schedule"
         }
       ]
+    },
+    "dataset_handler_config": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Yaml configuration file for dataset handler"
     },
     "wandbproject": {
       "type": "string",

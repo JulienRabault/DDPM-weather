@@ -61,7 +61,7 @@ def setup_logger(config, log_file="ddpm.log"):
     console_handler.setFormatter(console_formatter)
 
     # File handler for saving log messages to a file
-    file_handler = logging.FileHandler(os.path.join(config.run_name, log_file), mode='w+')
+    file_handler = logging.FileHandler(config.output_dir / config.run_name / log_file, mode='w+')
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
     file_handler.setFormatter(file_formatter)
@@ -120,7 +120,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config, path, csv_file):
+def prepare_dataloader(config):
     """
     Prepare the data loader.
     Args:
@@ -129,7 +129,11 @@ def prepare_dataloader(config, path, csv_file):
         DataLoader: Data loader.
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
-    train_set = dataSet_Handler.ISDataset(config, path, csv_file)
+    # different preprocessing strategies if we have to deal with rain rates ("rr")
+    if 'rr' in config.var_indexes #TODO :  make the "var_indexes" be "variables"
+        train_set = dataSet_Handler.rrISDataset(config, path, csv_file)
+    else:
+        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
@@ -150,7 +154,7 @@ def main_train(config):
     """
     # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
+    train_data = prepare_dataloader(config)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train()

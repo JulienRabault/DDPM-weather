@@ -45,10 +45,10 @@ class Ddpm_base:
         # Set training dataset information
         if self.dataloader is not None:
             self.train_dataset = self.dataloader.dataset
-            self.stds = self.train_dataset.stds
-            self.means = self.train_dataset.means
+            self.stds = self.train_dataset.value_sup
+            self.means = self.train_dataset.value_inf
 
-        # Set data transformation function based on configuration
+        # Set data transformation function based on configuration # TODO: ici Basile, ici incompatible avec mes modifs, j'ai une class Detransform si tu veux qu'on peut essayer d'adapter.
         if config.invert_norm:
             self.transforms_func = transforms.Compose([
                 transforms.Normalize(mean=[0.] * len(self.config.var_indexes),

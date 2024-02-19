@@ -15,14 +15,14 @@
   # Data parameters
   "data_dir": "/path/to/your/data/",
   "csv_file": "your_data_labels.csv",
+  "output_dir": "/path/to/save/dir/",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],
   "crop": [ 0,256,0,256 ],
   "invert_norm": false,
   "image_size": 256,
-  "mean_file": "mean_data.npy",
-  "max_file": "max_data.npy",
   "guiding_col": "your_guiding_column",
+  "dataset_handler_config": "/path/to/your/dataset_handler_config.yml",
 
   # Model parameters
   "scheduler": true,

@@ -207,18 +207,15 @@ class Trainer(Ddpm_base):
 
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", "best.pt"), avg_loss)
+                    self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / "best.pt", avg_loss)
 
                 if epoch % self.config.any_time == 0.0:
-                    self._save_snapshot(epoch, os.path.join(
-                        f"{self.config.run_name}", f"save_{epoch}.pt"), avg_loss)
+                    self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / f"save_{epoch}.pt", avg_loss)
 
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
                 self._log(epoch, log)
-                self._save_snapshot(epoch, os.path.join(
-                    f"{self.config.run_name}", "last.pt"), avg_loss)
+                self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / "last.pt", avg_loss)
 
         if is_main_gpu():
             wandb.finish()
@@ -253,12 +250,12 @@ class Trainer(Ddpm_base):
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
-            save_path = os.path.join(self.config.run_name, "samples", filename)
+            save_path = self.config.output_dir / self.config.run_name / "samples" / filename
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.run_name}/samples/")
+            f"Sampling done. Images saved in {self.config.output_dir / self.config.run_name / 'samples/'}")
 
     def _log(self, epoch, log_dict):
         """
@@ -273,8 +270,7 @@ class Trainer(Ddpm_base):
             return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
-        csv_filename = os.path.join(
-            f"{self.config.run_name}", "logs_train.csv")
+        csv_filename = self.config.output_dir / self.config.run_name / "logs_train.csv"
         file_exists = Path(csv_filename).is_file()
         with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
             fieldnames = ['epoch'] + list(log_dict.keys())
