@@ -221,7 +221,13 @@ class Trainer(Ddpm_base):
             wandb.finish()
             self.logger.info(
                 f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
-                f"saved at {self.config.output_dir / self.config.run_name / 'best.pt'}")
+                f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}")
+        
+        # Delete all variables to prevent GPU memory leaks, and empty GPU cache
+        del self.model
+        del self.dataloader
+        torch.cuda.empty_cache()
+
 
     def sample_train(self, ep=None, nb_img=4, condition=None):
         """

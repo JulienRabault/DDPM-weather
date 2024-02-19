@@ -129,17 +129,22 @@ def prepare_dataloader(config):
         DataLoader: Data loader.
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
-    train_set = dataSet_Handler.ISDataset(config)
+    # different preprocessing strategies if we have to deal with rain rates ("rr")
+    if 'rr' in config.var_indexes #TODO :  make the "var_indexes" be "variables"
+        train_set = dataSet_Handler.rrISDataset(config, path, csv_file)
+    else:
+        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
         pin_memory=True,
         shuffle=not torch.cuda.device_count() >= 2,
-        num_workers=1,
+        num_workers=config.num_workers,
         sampler=DistributedSampler(train_set, rank=get_rank_num(), shuffle=False,
-                                drop_last=True) if torch.cuda.device_count() >= 2 else None,
-        drop_last=True
+                                   drop_last=False) if torch.cuda.device_count() >= 2 else None,
+        drop_last=False,
     )
+
 
 def main_train(config):
     """
@@ -166,11 +171,22 @@ def main_train(config):
     synchronize()
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
-    config.model_path = config.output_dir / config.run_name / "best.pt"
-    model, _ = load_train_objs(config)
-    sampler = Sampler(model, config, dataloader=sample_data)
-    sampler.sample(filename_format="sample_best_{i}.npy")
-    logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+    config.model_path = os.path.join(config.run_name, "best.pt")
+
+    try:
+        model, _ = load_train_objs(config)
+        sampler = Sampler(model, config, dataloader=sample_data)
+        sampler.sample(filename_format="sample_best_{i}.npy")
+        logging.info(f"Training completed and best model sampled. You can check log and results in {config.run_name}")
+        del sampler
+        del model
+
+    except FileNotFoundError:
+        logging.warning(f"The best model was not created or is not found in {config.run_name}.")
+
+    # Delete all variables to prevent GPU memory leaks
+    del train_data
+    torch.cuda.empty_cache()
 
 
 def main_sample(config):
@@ -226,22 +242,17 @@ if __name__ == "__main__":
     Config.create_arguments(parser, schema)
     args = parser.parse_args()
     config = Config.from_args_and_yaml(args)
-    local_rank = get_rank()
+    param_values_list = [
+        config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
+    grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
-    # Configure logging and synchronize processes
-    if not config.use_wandb:
-        os.environ['WANDB_MODE'] = 'disabled'
-    else:
-        os.environ['WANDB_MODE'] = 'offline'
-        os.environ['WANDB_CACHE_DIR'] = str(config.output_dir / config.run_name / "WANDB/cache")
-        os.environ['WANDB_DIR'] = str(config.output_dir / config.run_name / "WANDB")
-    synchronize()
-    setup_logger(config)
-    logger = logging.getLogger(f'logddp_{get_rank_num()}')
-    if is_main_gpu():
-        config.save(config.output_dir / config.run_name / "config_train.yml")
-        logger.info(config)
-        logger.info(f'Mode {config.mode} selected')
+    run_name = config.run_name
+
+    logging.warning("*"*80)
+    logging.warning("GRIDSEARCH COMBINAISONS :")
+    for el in cartesian_product(grid_search_dict):
+        logging.warning(f"- { el}")
+    logging.warning("*"*80)
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 

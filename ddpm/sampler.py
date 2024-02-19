@@ -82,7 +82,7 @@ class Sampler(Ddpm_base):
                     raise ValueError(f"Sampling mode {self.config.sampling_mode} not supported.")
                 for s in samples:
                     filename = filename_format.format(i=str(i))
-                    save_path = self.config.output_dir / self.config.run_name / "samples" / filename
+                    save_path = os.path.join(self.config.run_name, "samples", filename)
                     np.save(save_path, s)
                     i += max(torch.cuda.device_count(), 1)
                 b += batch_size
@@ -92,4 +92,4 @@ class Sampler(Ddpm_base):
             self.plot_grid("last_samples.jpg", samples)
 
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.output_dir / self.config.run_name / 'samples'}")
+            f"Sampling done. Images saved in {self.config.run_name}/samples/")
