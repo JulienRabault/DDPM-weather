@@ -74,7 +74,15 @@ class ISDataset(Dataset):
             ]
         )
         return transformations
-
+    
+    def inversion_transforms(self):
+        detransform_func = transforms.Compose([
+                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
+                                     std=[1 / el for el in self.value_sup]),
+                transforms.Normalize(mean=[-el for el in self.value_inf],
+                                     std=[1.] * len(self.config.var_indexes)),
+            ])
+        return detransform_func
 
     def init_normalization(self):
         try:
@@ -91,7 +99,7 @@ class ISDataset(Dataset):
         means = list(tuple(Means))
         stds = list(tuple((1.0 / 0.95) * (Maxs)))
     
-        return means, stds
+        return stds, means
 
 
     def __len__(self):
@@ -195,6 +203,37 @@ class MultiOptionNormalize(object):
             sample = -1 + 2 * ((sample - self.value_inf) / (self.value_sup - self.value_inf))
         return sample
 
+    def denorm(self, sample):
+        if not isinstance(sample, torch.Tensor):
+            raise TypeError(f'Input sample should be a torch tensor. Got {type(sample)}.')
+        if sample.ndim < 3:
+            raise ValueError(f'Expected sample to be a tensor image of size (..., C, H, W). Got tensor.size() = {sample.size()}.')
+        elif sample.ndim == 3:
+            if 'rr' in self.config.var_indexes:
+                for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+                    sample[0] = torch.exp(sample[0]) - 1
+                if self.dataset_config.rr_transform['symetrization'] and np.random.random() <= 0.5:
+                    sample[0] = -sample[0]
+                if self.gaussian_std != 0:
+                    mask_no_rr = (sample[0].numpy() <= self.gaussian_std)
+                    sample[0] = sample[0].add_(from_numpy(self.gaussian_noise * mask_no_rr))
+        else:
+            if 'rr' in self.config.var_indexes:
+                for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+                    sample[:,0] = torch.exp(sample[:,0]) - 1.0
+                if self.dataset_config.rr_transform['symetrization']:
+                    sample[:,0] = torch.abs(sample[:,0])
+                if self.gaussian_std != 0:
+                    mask_no_rr = (sample[:,0].numpy() <= self.gaussian_std)
+                    sample[:,0] = sample[:,0].add_(from_numpy(self.gaussian_noise * mask_no_rr))
+        if self.dataset_config.normalization['type'] == 'mean':
+            sample = sample * self.value_sup + self.value_inf
+        elif self.dataset_config.normalization['type'] == 'minmax':
+            sample = self.value_inf + 0.5 * (self.value_sup - self.value_inf) * ((sample + 1.0))
+        return sample
+
+
+
 class Dataset_config:
     def __init__(self, dataset_config_file):
         # Load YAML configuration file and initialize logger
@@ -233,6 +272,14 @@ class rrISDataset(ISDataset):
         transformations.append(MultiOptionNormalize(self.value_sup, self.value_inf, self.dataset_config, self.config))
         return transformations
 
+    def inversion_transforms(self):
+        detransform_func = transforms.Compose([
+                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
+                                    std=[1 / el for el in self.value_sup]),
+                transforms.Normalize(mean=[-el for el in self.value_inf],
+                                    std=[1.] * len(self.config.var_indexes)),
+            ])
+        return detransform_func
 
     def init_normalization(self):
         normalization_type = self.dataset_config.normalization['type']
