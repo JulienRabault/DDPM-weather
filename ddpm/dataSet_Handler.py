@@ -10,7 +10,7 @@ DataSet/DataLoader classes from Importance_Sampled images
 DataSet:DataLoader classes for test samples
 
 """
-
+import os
 import random
 import re
 from pathlib import Path
@@ -45,6 +45,8 @@ class ISDataset(Dataset):
         if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop('Unnamed: 0', axis=1)
         self.config = config
+        self.dataset_config = Dataset_config(config.dataset_config_file) if config.dataset_config_file is not None else None
+
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
         self.ensembles = None
@@ -151,7 +153,7 @@ class MultiOptionNormalize(object):
         self.dataset_config = dataset_config
         self.config = config
         if 'rr' in self.config.var_indexes:
-            self.gaussian_std = self.datase_config.rr_transform['gaussian_std']
+            self.gaussian_std = self.dataset_config.rr_transform['gaussian_std']
             if self.gaussian_std:
                 for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
                     self.gaussian_std = np.log(1 + self.gaussian_std)
@@ -197,9 +199,9 @@ class Dataset_config:
     def __init__(self, dataset_config_file):
         # Load YAML configuration file and initialize logger
         with open(dataset_config_file, 'r') as yaml_file:
-        yaml_config = yaml.safe_load(yaml_file)
-        for prop, value in yaml_config.items():
-            setattr(self, prop, value)
+            yaml_config = yaml.safe_load(yaml_file)
+            for prop, value in yaml_config.items():
+                setattr(self, prop, value)
 
 class rrISDataset(ISDataset):
     def __init__(self, config, path, csv_file, add_coords=False):
@@ -215,10 +217,6 @@ class rrISDataset(ISDataset):
 
         """
         super().__init__(config,path,csv_file,add_coords=False)
-        if config.dataset_config_file is not None:
-            self.dataset_config = Dataset_config(config.dataset_config_file)
-        else:
-            raise KeyError("Using rrISDataset (to manage the rr variable) and still dataset_config_file is None / not provided")
     
     def prepare_tranformations(self):
         transformations = []
@@ -262,7 +260,7 @@ class rrISDataset(ISDataset):
             filename += '.npy'
 
             try:
-                path = self.data_dir / self.dataset_config.stat_folder / filename
+                path = os.path.join(self.data_dir,self.dataset_config.stat_folder,filename)
                 norm_var = np.load(path).astype('float32')
             except FileNotFoundError as err:
                 raise FileNotFoundError(f'{name} file was not found at this location: {path}')

@@ -120,7 +120,7 @@ def load_train_objs(config):
     return model, optimizer
 
 
-def prepare_dataloader(config):
+def prepare_dataloader(config, path, csv_file):
     """
     Prepare the data loader.
     Args:
@@ -130,7 +130,7 @@ def prepare_dataloader(config):
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
     # different preprocessing strategies if we have to deal with rain rates ("rr")
-    if 'rr' in config.var_indexes #TODO :  make the "var_indexes" be "variables"
+    if "rr" in config.var_indexes: #TODO :  make the "var_indexes" be "variables"
         train_set = dataSet_Handler.rrISDataset(config, path, csv_file)
     else:
         train_set = dataSet_Handler.ISDataset(config, path, csv_file)
@@ -154,7 +154,7 @@ def main_train(config):
     """
     # Load training objects and start the training process
     model, optimizer = load_train_objs(config)
-    train_data = prepare_dataloader(config)
+    train_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
     start = time.time()
     trainer = Trainer(model, config, dataloader=train_data, optimizer=optimizer)
     trainer.train()

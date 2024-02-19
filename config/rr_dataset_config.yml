@@ -4,7 +4,7 @@
 #	log_log...: 'log_' will be repeated log_transform_iteration times
 #	ppx: if the stats are per pixel, _ppx must be added at the end of the file
 
-stat_folder: "stat_folder/" # !!! relative to 'config_train' data_dir/ argument
+stat_folder: "stat_files_Massif_Central/" # !!! relative to 'config_train' data_dir/ argument
 stat_version: "rr" # the name of the stat file is for ex: 'mean_[stat_version]_log_ppx.npy'
 
 rr_transform:
