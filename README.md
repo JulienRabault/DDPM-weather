@@ -120,11 +120,11 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
   - `log_transform_iteration` : combien de fois la fonction log(1 + x) est elle applliquée (0 à 2 typiquement)
   - `symetrization`: application aléatoire (1/2) d'un signe "-" devant es échantillons d'une distribution forte asymétrique en 0. Défaut à false
   - `gaussian_std`: seuil en dessous duquel un bruit gaussien est appliqué. Défaut 0 (pas d'action);
-- normalization: stratégies de normalisation
-  - type: choix du format de normalisation "mean" (données normalisées moyenne 0, min/max entre -0.95 et 0.95), "minmax" : données normalisées min à -1 et max à 1, "quant" : données normalisées par les quantiles 1% et 99% (x <- -1 + 2(x-q01)/(q99-q01))
-  - per_pixel : si la normalisation a lieu par pixel (requiert des fichiers de constantes spatialisées).Défaut false
-  - for_rr:
-    - blur_iteration: applique N flous gaussiens successifs si la normalization est par pixel, sur rr uniquement. Défaut 1   
+- `normalization`: stratégies de normalisation
+  - `type`: choix du format de normalisation "mean" (données normalisées moyenne 0, min/max entre -0.95 et 0.95), "minmax" : données normalisées min à -1 et max à 1, "quant" : données normalisées par les quantiles 1% et 99% (x <- -1 + 2(x-q01)/(q99-q01))
+  - `per_pixel` : si la normalisation a lieu par pixel (requiert des fichiers de constantes spatialisées).Défaut false
+  - `for_rr`:
+    - `blur_iteration`: applique N flous gaussiens successifs si la normalization est par pixel, sur rr uniquement. Défaut 1   
 
 #### Pour reprendre un entraînement, 2 possibilités :
 
