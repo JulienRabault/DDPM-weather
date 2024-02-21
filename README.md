@@ -91,7 +91,7 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 ### Paramètres de Données :
 - `data_dir` : Répertoire contenant les données.
 - `v_i` : Nombre d'indices de variables.
-- `var_indexes` : Liste des indices de variables.
+- `var_indexes` : Noms des variables (liste).
 - `crop` : Paramètres de découpe pour les images.
 - `auto_normalize` : Normalisation automatique (par défaut : désactivée).
 - `invert_norm` : Inversion de la normalisation des échantillons d'image (par défaut : désactivée).
@@ -100,6 +100,7 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `max_file` : Chemin du fichier de maximum.
 - `guiding_col` : Colonne à utiliser pour l'échantillonnage guidé. Requis lors de l'utilisation du mode guidé.
 - `csv_file` : Chemin du fichier csv des labels (nécessaire pour le guidage).
+- `dataset_config_file` : Chemin du fichier de configuration pour le preprocessing (utilisé uniquement si `rr` fait partie des variables). 
 ### Paramètres du Modèle :
 - `scheduler` : Utiliser un planificateur pour le taux d'apprentissage.
 - `scheduler_epoch` : Nombre d'époques pour le planificateur pour ajuster le taux d'apprentissage (sauvegarde pour la reprise).
@@ -112,6 +113,18 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `wandbproject` : Nom du projet Wandb.
 - `use_wandb` : Utiliser Wandb pour la journalisation.
 - `entityWDB` : Nom de l'entité Wandb.
+### Configuration du fichier de preprocessing (exemple dans configs/rr_dataset_config.yml):
+- `stat_folder` : où trouver le fichier contenant les constantes de normalisation (chemin relatif au jeu de données)
+- `stat_version`: donne un identifiant pour les fichiers de constatnes utilisés (par défaut : "rr")
+- `rr_transform`: les options pour gérerle preprocessing des précips
+  - `log_transform_iteration` : combien de fois la fonction log(1 + x) est elle applliquée (0 à 2 typiquement)
+  - `symetrization`: application aléatoire (1/2) d'un signe "-" devant es échantillons d'une distribution forte asymétrique en 0. Défaut à false
+  - `gaussian_std`: seuil en dessous duquel un bruit gaussien est appliqué. Défaut 0 (pas d'action);
+- normalization: stratégies de normalisation
+  - type: choix du format de normalisation "mean" (données normalisées moyenne 0, min/max entre -0.95 et 0.95), "minmax" : données normalisées min à -1 et max à 1, "quant" : données normalisées par les quantiles 1% et 99% (x <- -1 + 2(x-q01)/(q99-q01))
+  - per_pixel : si la normalisation a lieu par pixel (requiert des fichiers de constantes spatialisées).Défaut false
+  - for_rr:
+    - blur_iteration: applique N flous gaussiens successifs si la normalization est par pixel, sur rr uniquement. Défaut 1   
 
 #### Pour reprendre un entraînement, 2 possibilités :
 
