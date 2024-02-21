@@ -3,7 +3,7 @@
   "mode": "Train",
   "run_name": "run_train",
   "batch_size": 10,
-  "any_time": 25,
+  "any_time": 5,
 
   # Sampling parameters
   "ddim_timesteps": 50,
@@ -13,7 +13,7 @@
   "random_noise": true,
 
   # Data parameters
-  "data_dir": /ddpm/data/,
+  "data_dir": /ddpm/data/, #path in the singularity container 
   "csv_file": "Large_lt_train_labels_1_ens.csv",
   "v_i": 3,
   "var_indexes": [ "u", "v", "t2m" ],

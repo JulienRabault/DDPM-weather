@@ -3,7 +3,7 @@
   "mode": "Train",
   "run_name": "run_train",
   "batch_size": 1,
-  "any_time": 25,
+  "any_time": 5,
   "num_workers": 4,
   # Sampling parameters
   "ddim_timesteps": 50,
