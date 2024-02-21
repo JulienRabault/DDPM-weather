@@ -273,12 +273,7 @@ class rrISDataset(ISDataset):
         return transformations
 
     def inversion_transforms(self):
-        detransform_func = transforms.Compose([
-                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                    std=[1 / el for el in self.value_sup]),
-                transforms.Normalize(mean=[-el for el in self.value_inf],
-                                    std=[1.] * len(self.config.var_indexes)),
-            ])
+        detransform_func = MultiOptionNormalize(self.value_sup,self.value_inf,self.dataset_config,self.config).denorm
         return detransform_func
 
     def init_normalization(self):
