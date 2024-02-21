@@ -129,6 +129,10 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `epochs` : Nombre d'époques d'entraînement.
 - `beta_schedule` : Type de planification des bêtas (cosinus ou linéaire).
 ### Paramètres de Suivi :
+- `use_mlflow`: activation mlflow log
+- `ml_tracking_uri`: path to log mlflow
+- `ml_experiment_name`: mlflow experience name
+
 - `wandbproject` : Nom du projet Wandb.
 - `use_wandb` : Utiliser Wandb pour la journalisation.
 - `entityWDB` : Nom de l'entité Wandb.
@@ -214,6 +218,10 @@ pour tester plusieur configuration de batch_size par exemple.
   "beta_schedule": "linear",
 
   # Tracking parameters
+  "use_mlflow": true, # activation mlflow log
+  "ml_tracking_uri": "../mlruns", # path to log mlflow
+  "ml_experiment_name": "ddpm", # experience name
+
   "wandbproject": "your_wandb_project",
   "use_wandb": true,
   "entityWDB": "your_entity"
