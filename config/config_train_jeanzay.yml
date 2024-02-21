@@ -36,7 +36,10 @@
   "dim_mults": [1, 2, 4, 8],
   
   # Tracking parameters
-  "use_mlflow": true,
+  "use_mlflow": true, # activation mlflow log
+  "ml_tracking_uri": "../../commun/commun/logs/mlruns", # path to log mlflow
+  "ml_experiment_name": "ddpm", # experience name
+
   "wandbproject": "your_wandb_project",
   "use_wandb": true,
   "entityWDB": "your_entity"

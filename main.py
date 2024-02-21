@@ -318,6 +318,12 @@ if __name__ == "__main__":
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
+        mlflow.set_tracking_uri(config.ml_tracking_uri)
+        experiment_name = config.ml_experiment_name
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            mlflow.create_experiment(experiment_name)
+
         with mlflow.start_run(nested=True, run_name=config.run_name):
             if config.multiple:
                 logging.warning("\t" + "-" * 80)

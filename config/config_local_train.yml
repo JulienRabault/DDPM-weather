@@ -33,7 +33,10 @@
   "lr": 0.0001,
 
   # Tracking parameters
-  "use_mlflow": true,
+  "use_mlflow": true, # activation mlflow log
+  "ml_tracking_uri": "../mlruns", # path to log mlflow
+  "ml_experiment_name": "ddpm", # experience name
+
   "wandbproject": "your_wandb_project",
   "use_wandb": false,
   "entityWDB": "your_entity"

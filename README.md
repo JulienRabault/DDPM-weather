@@ -55,6 +55,26 @@ Le suivi de WandB est offline par défaut. A la fin de l'entrainnement vous pouv
 wandb sync <{config.run_name}/WANDB>
 ```
 
+### Mlflow pour le suivi de l'entraînement
+
+Mlflow est un logger local, parametrable dans le fichier de config : 
+
+```yml
+# Tracking parameters
+"use_mlflow": true, # activation mlflow log
+"ml_tracking_uri": "../mlruns", # path to log mlflow 
+"ml_experiment_name": "ddpm", # experience name
+```
+
+Pour visualiser les résultats, cd dans le dir où est le dossier `mlruns`
+```bash
+cd < ml_tracking_uri >..
+mlflow ui
+>>> [INFO] Listening at: http://127.0.0.1:5000 (720864)
+```
+et ouvrir l'URL.
+
+
 ## Utilisation
 
 Le code principal est situé dans le fichier `main.py` et peut être exécuté avec différents modes :
