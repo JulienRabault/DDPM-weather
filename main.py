@@ -196,10 +196,8 @@ def main_sample(config):
     """
     # Load the model and start the sampling process
     model, _ = load_train_objs(config)
-    if config.sampling_mode != "simple":
-        sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
-    else:
-        sample_data = None
+    sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
+    
     sampler = Sampler(model, config, dataloader=sample_data)
     sampler.sample()
 

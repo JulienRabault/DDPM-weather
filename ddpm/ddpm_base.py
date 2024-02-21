@@ -52,15 +52,7 @@ class Ddpm_base:
 
             self.transforms_func = transforms_func
 
-        # Set data transformation function based on configuration # TODO: ici Basile, ici incompatible avec mes modifs, j'ai une class Detransform si tu veux qu'on peut essayer d'adapter.
-        else:
-            if config.invert_norm:
-                transforms_func
-            else:
-                def transforms_func(x):
-                    return x
-
-                self.transforms_func = transforms_func
+        # Set data transformation function based on configuration # TODO: ici Basile, ici incompatible avec mes modifs, j'ai une class Detransform si tu veux qu'on peut essayer d'adapter
         # if torch.__version__ >= "2.0.0":
         #     try:
         #         self.model = torch.compile(self.model)
