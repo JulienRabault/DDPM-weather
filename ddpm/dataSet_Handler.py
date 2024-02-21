@@ -37,12 +37,17 @@ class ISDataset(Dataset):
             add_coords (bool): Whether to add positional encoding.
         """
         self.data_dir = path
-        self.labels = pd.read_csv(os.path.join(path, csv_file))
+        self.labels = pd.read_csv(
+            os.path.join(path, csv_file), index_col=False
+        )
+        if "Unnamed: 0" in self.labels:
+            self.labels = self.labels.drop("Unnamed: 0", axis=1)
         self.config = config
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
         self.ensembles = None
 
+        print(self.labels.head())
         # Group labels by guiding column if specified
         if self.config.guiding_col is not None:
             if "Unnamed: 0" in self.labels:

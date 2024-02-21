@@ -139,7 +139,6 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
     train_set = dataSet_Handler.ISDataset(config, path, csv_file)
-
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
