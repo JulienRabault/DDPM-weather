@@ -301,7 +301,9 @@ if __name__ == "__main__":
     Config.create_arguments(parser, schema)
     default_args = parser.parse_args()
 
-    config = Config.from_args_and_yaml(default_args, schema_path, modified_args)
+    config = Config.from_args_and_yaml(
+        default_args, schema_path, modified_args
+    )
     param_values_list = [config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
     grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 

@@ -36,6 +36,7 @@
   "dim_mults": [1, 2, 4, 8],
   
   # Tracking parameters
+  "use_mlflow": true,
   "wandbproject": "your_wandb_project",
   "use_wandb": true,
   "entityWDB": "your_entity"

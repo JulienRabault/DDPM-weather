@@ -1,6 +1,9 @@
 import torch
 from denoising_diffusion_pytorch import GaussianDiffusion
-from denoising_diffusion_pytorch.denoising_diffusion_pytorch import default, extract
+from denoising_diffusion_pytorch.denoising_diffusion_pytorch import (
+    default,
+    extract,
+)
 from einops import reduce, rearrange
 from torch.nn.functional import mse_loss
 from tqdm import tqdm
@@ -29,7 +32,9 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
         """
         image_size, channels = self.image_size, self.channels
         sample_fn = (
-            self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
+            self.p_sample_loop
+            if not self.is_ddim_sampling
+            else self.ddim_sample
         )
         return sample_fn(
             (batch_size, channels, image_size, image_size),
@@ -81,15 +86,25 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             self.ddim_sampling_eta,
             self.objective,
         )
-        times = torch.linspace(-1, total_timesteps - 1, steps=sampling_timesteps + 1)
+        times = torch.linspace(
+            -1, total_timesteps - 1, steps=sampling_timesteps + 1
+        )
         times = list(reversed(times.int().tolist()))
         time_pairs = list(zip(times[:-1], times[1:]))
         img = torch.randn(shape, device=device)
         imgs = [img]
-        for time, time_next in tqdm(time_pairs, desc="sampling loop time step"):
-            time_cond = torch.full((batch,), time, device=device, dtype=torch.long)
+        for time, time_next in tqdm(
+            time_pairs, desc="sampling loop time step"
+        ):
+            time_cond = torch.full(
+                (batch,), time, device=device, dtype=torch.long
+            )
             pred_noise, x_start, *_ = self.model_predictions(
-                img, time_cond, condition, clip_x_start=True, rederive_pred_noise=True
+                img,
+                time_cond,
+                condition,
+                clip_x_start=True,
+                rederive_pred_noise=True,
             )
             if time_next < 0:
                 img = x_start
@@ -98,7 +113,10 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             alpha = self.alphas_cumprod[time]
             alpha_next = self.alphas_cumprod[time_next]
             sigma = (
-                eta * ((1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)).sqrt()
+                eta
+                * (
+                    (1 - alpha / alpha_next) * (1 - alpha_next) / (1 - alpha)
+                ).sqrt()
             )
             c = (1 - alpha_next - sigma**2).sqrt()
             noise = torch.randn_like(img)
@@ -109,7 +127,12 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
         return ret
 
     def p_losses(
-        self, x_start, t, noise=None, offset_noise_strength=None, condition=None
+        self,
+        x_start,
+        t,
+        noise=None,
+        offset_noise_strength=None,
+        condition=None,
     ):
         """
         Calculate pixel-wise loss for guided diffusion.
@@ -130,7 +153,9 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
 
         if offset_noise_strength > 0.0:
             offset_noise = torch.randn(x_start.shape[:2], device=self.device)
-            noise += offset_noise_strength * rearrange(offset_noise, "b c -> b c 1 1")
+            noise += offset_noise_strength * rearrange(
+                offset_noise, "b c -> b c 1 1"
+            )
 
         x = self.q_sample(x_start=x_start, t=t, noise=noise)
         x_self_cond = condition

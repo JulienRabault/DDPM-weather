@@ -210,6 +210,11 @@
       "default": "meteoDDPM",
       "description": "Wandb project name for logging"
     },
+    "use_mlflow": {
+      "type": "boolean",
+      "default": false,
+      "description": "Use mlflow for logging"
+    },
     "use_wandb": {
       "type": "boolean",
       "default": false,

@@ -11,7 +11,9 @@ from utils.distributed import get_rank, is_main_gpu, get_rank_num
 
 
 class Ddpm_base:
-    def __init__(self, model: torch.nn.Module, config, dataloader=None) -> None:
+    def __init__(
+        self, model: torch.nn.Module, config, dataloader=None
+    ) -> None:
         """
         Initialize the Trainer.
         Args:
@@ -140,7 +142,9 @@ class Ddpm_base:
         if condition is None:
             sampled_images = self.model.sample(batch_size=nb_img)
         else:
-            sampled_images = self.model.sample(batch_size=nb_img, condition=condition)
+            sampled_images = self.model.sample(
+                batch_size=nb_img, condition=condition
+            )
         sampled_images = self.transforms_func(sampled_images)
         return sampled_images.cpu().numpy()
 
@@ -153,11 +157,15 @@ class Ddpm_base:
         """
         nb_image = len(np_img)
         fig, axes = plt.subplots(
-            nrows=min(6, nb_image), ncols=len(self.config.var_indexes), figsize=(10, 10)
+            nrows=min(6, nb_image),
+            ncols=len(self.config.var_indexes),
+            figsize=(10, 10),
         )
         for i in range(min(6, nb_image)):
             for j in range(len(self.config.var_indexes)):
-                cmap = "viridis" if self.config.var_indexes[j] != "t2m" else "bwr"
+                cmap = (
+                    "viridis" if self.config.var_indexes[j] != "t2m" else "bwr"
+                )
                 image = np_img[i, j]
                 if len(self.config.var_indexes) > 1 and min(6, nb_image) > 1:
                     im = axes[i, j].imshow(image, cmap=cmap, origin="lower")

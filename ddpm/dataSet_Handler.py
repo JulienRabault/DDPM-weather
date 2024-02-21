@@ -47,16 +47,20 @@ class ISDataset(Dataset):
         if self.config.guiding_col is not None:
             if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop("Unnamed: 0", axis=1)
-            self.ensembles = self.labels.groupby([self.config.guiding_col]).agg(
-                lambda x: x
-            )
+            self.ensembles = self.labels.groupby(
+                [self.config.guiding_col]
+            ).agg(lambda x: x)
             self.ensembles = self.ensembles["Name"]
 
         # Add positional encoding
         self.add_coords = add_coords
         try:
-            Means = np.load(os.path.join(self.data_dir, config.mean_file))[self.VI]
-            Maxs = np.load(os.path.join(self.data_dir, config.max_file))[self.VI]
+            Means = np.load(os.path.join(self.data_dir, config.mean_file))[
+                self.VI
+            ]
+            Maxs = np.load(os.path.join(self.data_dir, config.max_file))[
+                self.VI
+            ]
         except (FileNotFoundError, KeyError):
             try:
                 Means = np.load(config.mean_file)[self.VI]
