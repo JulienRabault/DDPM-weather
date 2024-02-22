@@ -87,7 +87,7 @@ class ISDataset(Dataset):
     def init_normalization(self):
         try:
             Means = np.load(os.path.join(self.data_dir, self.config.mean_file))[self.VI]
-            Maxs = np.load(os.path.join(self.data_dir, config.max_file))[self.VI]
+            Maxs = np.load(os.path.join(self.data_dir, self.config.max_file))[self.VI]
         except (FileNotFoundError, KeyError):
             try:
                 Means = np.load(config.mean_file)[self.VI]
