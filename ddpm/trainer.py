@@ -254,7 +254,8 @@ class Trainer(Ddpm_base):
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
         for i, img in enumerate(samples):
             filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
-            save_path = self.config.output_dir / self.config.run_name / "samples" / filename
+            save_path = os.path.join(self.config.output_dir, self.config.run_name, "samples", filename)
+
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
