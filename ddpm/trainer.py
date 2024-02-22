@@ -276,7 +276,9 @@ class Trainer(Ddpm_base):
             return
         if self.config.use_wandb:
             wandb.log(log_dict, step=epoch)
-        csv_filename = self.config.output_dir / self.config.run_name / "logs_train.csv"
+        csv_filename = os.path.join(self.config.output_dir,
+            f"{self.config.run_name}", "logs_train.csv")
+
         file_exists = Path(csv_filename).is_file()
         with open(csv_filename, 'a' if file_exists else 'w', newline='') as csvfile:
             fieldnames = ['epoch'] + list(log_dict.keys())
