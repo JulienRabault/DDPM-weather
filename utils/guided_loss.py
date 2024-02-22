@@ -27,14 +27,18 @@ def get_all_losses(omit=None):
     loss_dict = {}
 
     for name, obj in nn.__dict__.items():
-        if isinstance(obj, type) and issubclass(obj, loss._Loss) and obj is not loss._Loss:
+        if (
+            isinstance(obj, type)
+            and issubclass(obj, loss._Loss)
+            and obj is not loss._Loss
+        ):
             if omit is None or name not in omit:
                 loss_dict[name] = obj()
 
     return loss_dict
 
 
-omit_list = ['NLLLoss2d']
+omit_list = ["NLLLoss2d"]
 
 loss_dict = get_all_losses(omit=omit_list)
-loss_dict = {**loss_dict, **{'ImageBasicLoss': ImageBasicLoss()}}
+loss_dict = {**loss_dict, **{"ImageBasicLoss": ImageBasicLoss()}}

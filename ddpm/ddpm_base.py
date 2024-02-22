@@ -12,10 +12,8 @@ from utils.distributed import get_rank, is_main_gpu, get_rank_num
 
 class Ddpm_base:
     def __init__(
-            self,
-            model: torch.nn.Module,
-            config,
-            dataloader=None) -> None:
+        self, model: torch.nn.Module, config, dataloader=None
+    ) -> None:
         """
         Initialize the Trainer.
         Args:
@@ -31,7 +29,7 @@ class Ddpm_base:
         self.dataloader = dataloader
         self.snapshot_path = self.config.model_path
         self.model = model
-        self.logger = logging.getLogger(f'logddp_{get_rank_num()}')
+        self.logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
         # Load snapshot if available
         if self.snapshot_path is not None:
@@ -50,13 +48,20 @@ class Ddpm_base:
 
         # Set data transformation function based on configuration
         if config.invert_norm:
-            self.transforms_func = transforms.Compose([
-                transforms.Normalize(mean=[0.] * len(self.config.var_indexes),
-                                     std=[1 / el for el in self.stds]),
-                transforms.Normalize(mean=[-el for el in self.means],
-                                     std=[1.] * len(self.config.var_indexes)),
-            ])
+            self.transforms_func = transforms.Compose(
+                [
+                    transforms.Normalize(
+                        mean=[0.0] * len(self.config.var_indexes),
+                        std=[1 / el for el in self.stds],
+                    ),
+                    transforms.Normalize(
+                        mean=[-el for el in self.means],
+                        std=[1.0] * len(self.config.var_indexes),
+                    ),
+                ]
+            )
         else:
+
             def transforms_func(x):
                 return x
 
@@ -70,8 +75,9 @@ class Ddpm_base:
         # Convert model for multi-GPU training if available
         if torch.cuda.device_count() >= 2:
             self.model = nn.SyncBatchNorm.convert_sync_batchnorm(self.model)
-            self.model = nn.parallel.DistributedDataParallel(self.model, device_ids=[self.gpu_id],
-                                                             output_device=self.gpu_id)
+            self.model = nn.parallel.DistributedDataParallel(
+                self.model, device_ids=[self.gpu_id], output_device=self.gpu_id
+            )
             self.model = self.model.module
 
     def _load_snapshot(self, snapshot_path):
@@ -102,14 +108,23 @@ class Ddpm_base:
             # Load standard deviations and means from the snapshot
             self.stds = data_config["STDS"]
             self.means = data_config["MEANS"]
-            if data_config['V_IDX'] != self.config.var_indexes or data_config['CROP'] != self.config.crop:
-                raise ValueError("The variable indexes or crop of the snapshot do not match the current config")
+            if (
+                data_config["V_IDX"] != self.config.var_indexes
+                or data_config["CROP"] != self.config.crop
+            ):
+                raise ValueError(
+                    "The variable indexes or crop of the snapshot do not match the current config"
+                )
         except KeyError:
             # If data config is not available in the snapshot, issue a warning
-            warnings.warn("The snapshot does not contain data config, assuming it is the same as the current config")
+            warnings.warn(
+                "The snapshot does not contain data config, assuming it is the same as the current config"
+            )
 
         if is_main_gpu():
-            self.logger.info(f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}")
+            self.logger.info(
+                f" Resuming model from {snapshot_path} at Epoch {self.epochs_run}"
+            )
 
         self.epochs_run += 1
 
@@ -127,7 +142,9 @@ class Ddpm_base:
         if condition is None:
             sampled_images = self.model.sample(batch_size=nb_img)
         else:
-            sampled_images = self.model.sample(batch_size=nb_img, condition=condition)
+            sampled_images = self.model.sample(
+                batch_size=nb_img, condition=condition
+            )
         sampled_images = self.transforms_func(sampled_images)
         return sampled_images.cpu().numpy()
 
@@ -139,19 +156,28 @@ class Ddpm_base:
             np_img (numpy.ndarray): Array of images to plot.
         """
         nb_image = len(np_img)
-        fig, axes = plt.subplots(nrows=min(6, nb_image), ncols=len(self.config.var_indexes), figsize=(10, 10))
+        fig, axes = plt.subplots(
+            nrows=min(6, nb_image),
+            ncols=len(self.config.var_indexes),
+            figsize=(10, 10),
+        )
         for i in range(min(6, nb_image)):
             for j in range(len(self.config.var_indexes)):
-                cmap = 'viridis' if self.config.var_indexes[j] != 't2m' else 'bwr'
+                cmap = (
+                    "viridis" if self.config.var_indexes[j] != "t2m" else "bwr"
+                )
                 image = np_img[i, j]
                 if len(self.config.var_indexes) > 1 and min(6, nb_image) > 1:
-                    im = axes[i, j].imshow(image, cmap=cmap, origin='lower')
-                    axes[i, j].axis('off')
+                    im = axes[i, j].imshow(image, cmap=cmap, origin="lower")
+                    axes[i, j].axis("off")
                     fig.colorbar(im, ax=axes[i, j])
                 else:
-                    im = axes[i].imshow(image, cmap=cmap, origin='lower')
-                    axes[i].axis('off')
+                    im = axes[i].imshow(image, cmap=cmap, origin="lower")
+                    axes[i].axis("off")
                     fig.colorbar(im, ax=axes[i])
         # Save the plot to the specified file path
-        plt.savefig(os.path.join(f"{self.config.run_name}", "samples", file_name), bbox_inches='tight')
+        plt.savefig(
+            os.path.join(f"{self.config.run_name}", "samples", file_name),
+            bbox_inches="tight",
+        )
         plt.close()

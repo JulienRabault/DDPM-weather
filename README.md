@@ -14,11 +14,16 @@ Le projet est structuré comme suit :
 │   ├── guided_gaussian_diffusion.py   # Implémentation de la diffusion guidée
 │   ├── sampler.py                     # Implémentation du sampler
 │   └── trainer.py                     # Implémentation du trainer
-├── utils
-│   ├── config.py                      # Gestionnaire de configuration
-│   ├── config_schema.json             # Schéma de configuration, valeur par défaut
-│   ├── distributed.py                 # Gestionnaire de la distribution multi GPU
-│   └── guided_loss.py                 # Implémentation des loss pour la diffusion guidée simple
+└── utils
+    ├── calculate_ensemble.py          # Utilitaire pour calculer les ensembles
+    ├── config.py                      # Gestionnaire de configuration
+    ├── config_schema.json             # Schéma de configuration, valeur par défaut
+    ├── distributed.py                 # Gestionnaire de la distribution multi GPU
+    ├── guided_loss.py                 # Implémentation des loss pour la diffusion guidée simple
+├── slurm
+│   ├── reserve_node.slurm             # slurm batch et start_singularity.sh 
+│   ├── start_singularity.sh           # Configure start_singularity et train.sh
+│   └── train.sh                       # ligne de commande qui execture le main.py 
 ├── main.py                            # Point d'entrée du code
 ├── requirements.txt                   # Dépendances du projet
 ├── config_sample.yml                  # Exemple de configuration d'échantillonnage
@@ -54,6 +59,26 @@ Le suivi de WandB est offline par défaut. A la fin de l'entrainnement vous pouv
 ```bash
 wandb sync <{config.run_name}/WANDB>
 ```
+
+### Mlflow pour le suivi de l'entraînement
+
+Mlflow est un logger local, parametrable dans le fichier de config : 
+
+```yml
+# Tracking parameters
+"use_mlflow": true, # activation mlflow log
+"ml_tracking_uri": "../mlruns", # path to log mlflow 
+"ml_experiment_name": "ddpm", # experience name
+```
+
+Pour visualiser les résultats, cd dans le dir où est le dossier `mlruns`
+```bash
+cd < ml_tracking_uri >..
+mlflow ui
+>>> [INFO] Listening at: http://127.0.0.1:5000 (720864)
+```
+et ouvrir l'URL.
+
 
 ## Utilisation
 
@@ -109,6 +134,10 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `epochs` : Nombre d'époques d'entraînement.
 - `beta_schedule` : Type de planification des bêtas (cosinus ou linéaire).
 ### Paramètres de Suivi :
+- `use_mlflow`: activation mlflow log
+- `ml_tracking_uri`: path to log mlflow
+- `ml_experiment_name`: mlflow experience name
+
 - `wandbproject` : Nom du projet Wandb.
 - `use_wandb` : Utiliser Wandb pour la journalisation.
 - `entityWDB` : Nom de l'entité Wandb.
@@ -124,13 +153,11 @@ Si vous voulez utiliser le scheduler, il faut utiliser `scheduler` et `scheduler
 
 1. Entraîner le modèle :
 
-
 ```python
 python main.py --yaml_path config_train.yml --batch_size 64 --lr 0.0001
 ```
 
 2. Tester (Sample) le modèle :
-
 
 ```python
 python main.py --yaml_path config_sample.yml
@@ -138,7 +165,7 @@ python main.py --yaml_path config_sample.yml
 
 3. Entraînement avec plusieurs GPUs 
 ```python
-python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path config_sample.yml
+python torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path config_sample.yml
 ```
 
 4. Reprendre l'entraînement à partir d'un point de contrôle :
@@ -147,6 +174,17 @@ python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml
 python main.py --yaml_path config_train.yml --model_path checkpoints/checkpoint.pt --resume
 ```
 attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans le fichier yaml.
+
+
+5. plusieur entrainements en séquentiel :
+
+```python
+python main.py -m --yaml_path config_sample.yml
+```
+
+avec dans le fichier de config yaml : 
+```"batch_size": [4,8,16],```
+pour tester plusieur configuration de batch_size par exemple. 
 
 ### Exemple de fichier de configuration YAML :
 
@@ -185,6 +223,10 @@ attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans 
   "beta_schedule": "linear",
 
   # Tracking parameters
+  "use_mlflow": true, # activation mlflow log
+  "ml_tracking_uri": "../mlruns", # path to log mlflow
+  "ml_experiment_name": "ddpm", # experience name
+
   "wandbproject": "your_wandb_project",
   "use_wandb": true,
   "entityWDB": "your_entity"
@@ -192,6 +234,19 @@ attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans 
 ```
 
 Si des valeur ne sont pas spécifiées dans le fichier de configuration, elles seront remplacées par les valeurs par défaut ou par la surcharge lors de l'appel du fichier `main.py`.
+
+
+## Singularity & slurm
+
+Installation de *singularity* en téléchargeant le paquet ici : https://github.com/sylabs/singularity/releases/
+
+Construit l'image avec `ddpm.def` : `singularity build --nv ddpm.sif ddpm.def`
+
+Entre dans le contener singularity en montant les chemins du code source et des données : `singularity shell --nv --bind .:/ddpm <data_dir>:/data ddpm.sif` 
+et dans `/ddpm/` lance ton entrainement suivant les instructions ci dessus. Ne pas oublier de redéfinir le chemin des données dans `/data/` dans la config yaml.    
+
+Pour une réservation slurm, lancer la réservation avec `sbatch slurm/reserve_node.slurm config/config_train_jeanzay.yml`. Ne pas oublier de changer ci besoin le `slurm/.env` pour monter les bons chemin de dossiers de log, de données, de sources et de l'image singularity .sif.   
+
 ## Contact
 
 Pour toute question, vous pouvez me contacter à l'adresse suivante : `julien.rabault@irit.fr`
