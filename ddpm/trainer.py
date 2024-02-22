@@ -210,7 +210,9 @@ class Trainer(Ddpm_base):
                     self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / "best.pt", avg_loss)
 
                 if epoch % self.config.any_time == 0.0:
-                    self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / f"save_{epoch}.pt", avg_loss)
+                    self._save_snapshot(epoch, os.path.join(self.config.output_dir,
+                        f"{self.config.run_name}", "best.pt"), avg_loss)
+
 
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
