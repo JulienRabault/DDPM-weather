@@ -61,7 +61,8 @@ def setup_logger(config, log_file="ddpm.log"):
     console_handler.setFormatter(console_formatter)
 
     # File handler for saving log messages to a file
-    file_handler = logging.FileHandler(config.output_dir / config.run_name / log_file, mode='w+')
+    file_handler = logging.FileHandler(os.path.join(config.output_dir, config.run_name, log_file), mode='w+')
+
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
     file_handler.setFormatter(file_formatter)
