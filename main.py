@@ -268,7 +268,6 @@ def convert_to_type(value, type_list):
 
 if __name__ == "__main__":
 
-    # mlflow.start_run()
     # Parse command line arguments and load configuration
     parser = argparse.ArgumentParser(
         description="Deep Learning Training and Testing Script"
@@ -366,5 +365,3 @@ if __name__ == "__main__":
     # Clean up distributed processes if initialized
     if dist.is_initialized():
         destroy_process_group()
-
-    # mlflow.end_run()
