@@ -217,7 +217,9 @@ class Trainer(Ddpm_base):
                 log = {"avg_loss": avg_loss,
                        "lr": self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}
                 self._log(epoch, log)
-                self._save_snapshot(epoch, self.config.output_dir / self.config.run_name / "last.pt", avg_loss)
+                self._save_snapshot(epoch, os.path.join(self.config.output_dir,
+                        f"{self.config.run_name}", "last.pt"), avg_loss)
+
 
         if is_main_gpu():
             wandb.finish()
