@@ -47,12 +47,16 @@ class Config:
         config_string = "Configuration:"
         for attr, value in self.to_dict().items():
             config_string += f"\n\t{attr}: {value}"
-        config_string += f"\n\tWANDB_MODE: {os.environ.get('WANDB_MODE', 'Not set')}\n"
+        config_string += (
+            f"\n\tWANDB_MODE: {os.environ.get('WANDB_MODE', 'Not set')}\n"
+        )
         return config_string
 
     def _update_from_args(self, args):
         # Update configuration attributes from command line arguments
-        logging.debug(f"Updating configuration from command line arguments: {args}")
+        logging.debug(
+            f"Updating configuration from command line arguments: {args}"
+        )
         logging.debug(f"Schema path: {self.schema_path}")
         for prop, value in args.__dict__.items():
             setattr(self, prop, value)
@@ -68,9 +72,13 @@ class Config:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
         # Check specific conditions for certain configuration values
-        if self.sampling_mode == "guided" or self.sampling_mode == "simple_guided":
+        if (
+            self.sampling_mode == "guided"
+            or self.sampling_mode == "simple_guided"
+        ):
             assert (
-                self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100
+                self.guidance_loss_scale >= 0
+                and self.guidance_loss_scale <= 100
             ), "Guidance loss scale must be between 0 and 100."
             if self.data_dir is None:
                 raise ValueError(
@@ -115,7 +123,7 @@ class Config:
             paths.append(f"{self.run_name}/WANDB/")
             paths.append(f"{self.run_name}/WANDB/cache")
         self._next_run_dir(paths)
-        
+
         return
 
     def to_dict(self):
@@ -152,7 +160,9 @@ class Config:
             try:
                 arg_type = TYPE_MAPPER.get(prop_schema.get("type", "str"), str)
             except:
-                arg_type = TYPE_MAPPER.get(prop_schema.get("type", "str")[0], str)
+                arg_type = TYPE_MAPPER.get(
+                    prop_schema.get("type", "str")[0], str
+                )
             arg_default = prop_schema.get("default", None)
             arg_help = prop_schema.get("description", None)
             if arg_type == list:
@@ -165,11 +175,17 @@ class Config:
                 )
             elif arg_type == bool:
                 parser.add_argument(
-                    f"--{prop}", default=arg_default, help=arg_help, action="store_true"
+                    f"--{prop}",
+                    default=arg_default,
+                    help=arg_help,
+                    action="store_true",
                 )
             else:
                 parser.add_argument(
-                    f"--{prop}", type=arg_type, default=arg_default, help=arg_help
+                    f"--{prop}",
+                    type=arg_type,
+                    default=arg_default,
+                    help=arg_help,
                 )
 
     def _next_run_dir(self, paths, suffix=None):
@@ -182,12 +198,16 @@ class Config:
                     )
 
         else:
-            current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S%f")[:-3]
+            current_datetime = datetime.datetime.now().strftime(
+                "%Y%m%d_%H%M%S%f"
+            )[:-3]
             train_num = 1
             train_name = self.run_name
             while os.path.exists(train_name):
                 if suffix is not None:
-                    train_name = self.basename + "__" + suffix + "_" + current_datetime
+                    train_name = (
+                        self.basename + "__" + suffix + "_" + current_datetime
+                    )
                 else:
                     while os.path.exists(train_name):
                         if f"_{train_num}" in train_name:
@@ -212,13 +232,11 @@ class Config:
             for path in paths:
                 os.makedirs(path, exist_ok=True)
 
-    def _update_from_config(self, yaml_path, overload:list):
+    def _update_from_config(self, yaml_path, overload: list):
         yaml_config = load_yaml(yaml_path)
-        overload = [s.lstrip('-') for s in overload]
+        overload = [s.lstrip("-") for s in overload]
         for key, value in yaml_config.items():
             if key not in overload:
                 setattr(self, key, value)
             else:
-                logging.warning(
-                    f"Overloading {key} to {getattr(self, key)}"
-                )
+                logging.warning(f"Overloading {key} to {getattr(self, key)}")

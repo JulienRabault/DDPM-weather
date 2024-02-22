@@ -85,13 +85,6 @@ class Trainer(Ddpm_base):
         loss.backward()
         self.optimizer.step()
         loss = loss.detach().cpu()
-        if self.config.multiple:
-            # Delete all variables to prevent GPU memory leaks,
-            # and empty GPU cache
-            self._purge_batch_memory(batch)
-            torch.cuda.empty_cache()
-            # increase the computing time of ~10% : the price to prevent leakage
-
         return loss
 
     def _run_epoch(self, epoch):

@@ -278,18 +278,9 @@ if __name__ == "__main__":
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")
-    parser.add_argument(
-        "-m",
-        "--multiple",
-        action="store_true",
-        help="multiple sequential runs",
-    )
     args, modified_args = parser.parse_known_args()
 
-    if args.multiple:
-        schema_path = "utils/config_schema_multiple_runs.json"
-    else:
-        schema_path = "utils/config_schema.json"
+    schema_path = "utils/config_schema.json"
     with open(schema_path, "r") as schema_file:
         schema = json.load(schema_file)
 
@@ -301,55 +292,33 @@ if __name__ == "__main__":
     config = Config.from_args_and_yaml(
         default_args, schema_path, modified_args
     )
-    param_values_list = [config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
-    grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
-    run_name = config.run_name
+    local_rank = get_rank()
 
-    if config.multiple:
-        logging.warning("*" * 80)
-        logging.warning("GRIDSEARCH COMBINAISONS :")
-        for el in cartesian_product(grid_search_dict):
-            logging.warning(f"- { el}")
-        logging.warning("*" * 80)
+    # Configure logging and synchronize processes
+    if not config.use_wandb:
+        os.environ["WANDB_MODE"] = "disabled"
+    else:
+        os.environ["WANDB_MODE"] = "offline"
+        os.environ["WANDB_CACHE_DIR"] = f"{config.run_name}/WANDB/cache"
+        os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
+    synchronize()
+    setup_logger(config)
+    logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
-    for k, current_params in enumerate(cartesian_product(grid_search_dict)):
+    if is_main_gpu():
+        config.save(f"{config.run_name}/config_train.yml")
+        logger.info(config)
+        logger.info(f"Mode {config.mode} selected")
 
-        if config.multiple:
-            logging.warning("\t" + "-" * 80)
-            logging.warning("\t" + f"COMBINAISON : {current_params}")
-            logging.warning("\t" + "-" * 80)
+    synchronize()
+    logger.debug(f"Local_rank: {local_rank}")
 
-        if k > 0:
-            config = Config.from_args_and_yaml(args, schema_path)
-        config._update_from_dict(current_params)
-
-        local_rank = get_rank()
-
-        # Configure logging and synchronize processes
-        if not config.use_wandb:
-            os.environ["WANDB_MODE"] = "disabled"
-        else:
-            os.environ["WANDB_MODE"] = "offline"
-            os.environ["WANDB_CACHE_DIR"] = f"{config.run_name}/WANDB/cache"
-            os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
-        synchronize()
-        setup_logger(config)
-        logger = logging.getLogger(f"logddp_{get_rank_num()}")
-
-        if is_main_gpu():
-            config.save(f"{config.run_name}/config_train.yml")
-            logger.info(config)
-            logger.info(f"Mode {config.mode} selected")
-
-        synchronize()
-        logger.debug(f"Local_rank: {local_rank}")
-
-        # Execute the main training or sampling function based on the mode
-        if config.mode == "Train":
-            main_train(config)
-        elif config.mode != "Train":
-            main_sample(config)
+    # Execute the main training or sampling function based on the mode
+    if config.mode == "Train":
+        main_train(config)
+    elif config.mode != "Train":
+        main_sample(config)
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():
