@@ -210,6 +210,18 @@ class Trainer(Ddpm_base):
             },
         )
 
+    def _init_mlflow(self):
+
+        mlflow.set_tracking_uri(self.config.ml_tracking_uri)
+        experiment_name = self.config.ml_experiment_name
+        experiment = mlflow.get_experiment_by_name(experiment_name)
+        if experiment is None:
+            mlflow.create_experiment(experiment_name)
+
+        mlflow.start_run(nested=True, run_name=self.config.run_name)
+
+        mlflow.log_params(self.config.to_dict())
+
     def train(self):
         """
         Start the training process.
@@ -219,7 +231,12 @@ class Trainer(Ddpm_base):
 
         filename_format = "sample_epoch{epoch}_{i}.npy"
         if is_main_gpu():
-            self._init_wandb()
+
+            if self.config.use_wandb:
+                self._init_wandb()
+            if self.config.use_mlflow:
+                self._init_mlflow()
+
             loop = tqdm(
                 range(self.epochs_run, self.config.epochs + self.epochs_run),
                 desc=f"Training...",
@@ -269,9 +286,14 @@ class Trainer(Ddpm_base):
                 )
 
         if is_main_gpu():
-            wandb.finish()
+
+            if self.config.use_wandb:
+                wandb.finish()
+            if self.config.use_mlflow:
+                mlflow.end_run()
+
             self.logger.info(
-                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
+                f"Training finished , best loss : {self.best_loss:.6f}, lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}, "
                 f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}"
             )
 

@@ -14,11 +14,16 @@ Le projet est structuré comme suit :
 │   ├── guided_gaussian_diffusion.py   # Implémentation de la diffusion guidée
 │   ├── sampler.py                     # Implémentation du sampler
 │   └── trainer.py                     # Implémentation du trainer
-├── utils
-│   ├── config.py                      # Gestionnaire de configuration
-│   ├── config_schema.json             # Schéma de configuration, valeur par défaut
-│   ├── distributed.py                 # Gestionnaire de la distribution multi GPU
-│   └── guided_loss.py                 # Implémentation des loss pour la diffusion guidée simple
+└── utils
+    ├── calculate_ensemble.py          # Utilitaire pour calculer les ensembles
+    ├── config.py                      # Gestionnaire de configuration
+    ├── config_schema.json             # Schéma de configuration, valeur par défaut
+    ├── distributed.py                 # Gestionnaire de la distribution multi GPU
+    ├── guided_loss.py                 # Implémentation des loss pour la diffusion guidée simple
+├── slurm
+│   ├── reserve_node.slurm             # slurm batch et start_singularity.sh 
+│   ├── start_singularity.sh           # Configure start_singularity et train.sh
+│   └── train.sh                       # ligne de commande qui execture le main.py 
 ├── main.py                            # Point d'entrée du code
 ├── requirements.txt                   # Dépendances du projet
 ├── config_sample.yml                  # Exemple de configuration d'échantillonnage

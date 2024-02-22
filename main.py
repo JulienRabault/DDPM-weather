@@ -22,7 +22,6 @@ from ddpm.trainer import Trainer
 from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
 import numpy as np
-import mlflow
 
 # list of parameters available for grid search
 # every parameters must be modified in config_schema.json
@@ -316,51 +315,41 @@ if __name__ == "__main__":
 
     for k, current_params in enumerate(cartesian_product(grid_search_dict)):
 
-        mlflow.set_tracking_uri(config.ml_tracking_uri)
-        experiment_name = config.ml_experiment_name
-        experiment = mlflow.get_experiment_by_name(experiment_name)
-        if experiment is None:
-            mlflow.create_experiment(experiment_name)
+        if config.multiple:
+            logging.warning("\t" + "-" * 80)
+            logging.warning("\t" + f"COMBINAISON : {current_params}")
+            logging.warning("\t" + "-" * 80)
 
-        with mlflow.start_run(nested=True, run_name=config.run_name):
-            if config.multiple:
-                logging.warning("\t" + "-" * 80)
-                logging.warning("\t" + f"COMBINAISON : {current_params}")
-                logging.warning("\t" + "-" * 80)
+        if k > 0:
+            config = Config.from_args_and_yaml(args, schema_path)
+        config._update_from_dict(current_params)
 
-            if k > 0:
-                config = Config.from_args_and_yaml(args, schema_path)
-            config._update_from_dict(current_params)
+        local_rank = get_rank()
 
-            mlflow.log_params(config.to_dict())
-            local_rank = get_rank()
+        # Configure logging and synchronize processes
+        if not config.use_wandb:
+            os.environ["WANDB_MODE"] = "disabled"
+        else:
+            os.environ["WANDB_MODE"] = "offline"
+            os.environ["WANDB_CACHE_DIR"] = f"{config.run_name}/WANDB/cache"
+            os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
+        synchronize()
+        setup_logger(config)
+        logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
-            # Configure logging and synchronize processes
-            if not config.use_wandb:
-                os.environ["WANDB_MODE"] = "disabled"
-            else:
-                os.environ["WANDB_MODE"] = "offline"
-                os.environ["WANDB_CACHE_DIR"] = (
-                    f"{config.run_name}/WANDB/cache"
-                )
-                os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
-            synchronize()
-            setup_logger(config)
-            logger = logging.getLogger(f"logddp_{get_rank_num()}")
+        if is_main_gpu():
+            config.save(f"{config.run_name}/config_train.yml")
+            logger.info(config)
+            logger.info(f"Mode {config.mode} selected")
 
-            if is_main_gpu():
-                config.save(f"{config.run_name}/config_train.yml")
-                logger.info(config)
-                logger.info(f"Mode {config.mode} selected")
+        synchronize()
+        logger.debug(f"Local_rank: {local_rank}")
 
-            synchronize()
-            logger.debug(f"Local_rank: {local_rank}")
-
-            # Execute the main training or sampling function based on the mode
-            if config.mode == "Train":
-                main_train(config)
-            elif config.mode != "Train":
-                main_sample(config)
+        # Execute the main training or sampling function based on the mode
+        if config.mode == "Train":
+            main_train(config)
+        elif config.mode != "Train":
+            main_sample(config)
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():
