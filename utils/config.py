@@ -83,7 +83,7 @@ class Config:
             if is_main_gpu():
                 self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
         if "rr" in self.var_indexes:
-            if self.dataset_config_file is not None :
+            if self.dataset_config_file is None :
                 raise ValueError("field dataset_config_file should not be None / should be spec'd if rr is among the variables")
         cond_n_sample = self.batch_size if isinstance(self.batch_size, int) else min(self.batch_size)
 
@@ -198,10 +198,9 @@ class Config:
                 os.makedirs(path, exist_ok=True)
 
 class DataSetConfig(Config):
-    def __init__(self, args):
+    def __init__(self, yaml_path):
         # Load YAML configuration file and initialize logger
-        yaml_config = load_yaml(args.yaml_path)
-        self._update_from_args(args)
+        yaml_config = load_yaml(yaml_path)
         for prop, value in yaml_config.items():
             setattr(self, prop, value)
 
@@ -212,6 +211,4 @@ class DataSetConfig(Config):
         with open(DATASET_CONFIG_SCHEMA_PATH, 'r') as schema_file:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
-        # Check specific conditions for certain configuration values
-        self.output_dir = Path(self.output_dir)
 

@@ -273,7 +273,8 @@ class Trainer(Ddpm_base):
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         self.logger.info(
-            f"Sampling done. Images saved in {os.path.join(self.config.output_dir, self.config.run_name, "samples")}")
+            f"Sampling done. Images saved in {os.path.join(self.config.output_dir, self.config.run_name, 'samples')}"
+            )
 
 
     def _log(self, epoch, log_dict):

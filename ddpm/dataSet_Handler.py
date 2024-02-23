@@ -23,7 +23,7 @@ import torchvision.transforms as transforms
 import yaml
 from torch.utils.data import Dataset
 
-from utils.config import Config
+from utils.config import DataSetConfig
 ################ reference dictionary to know what variables to sample where
 ################ do not modify unless you know what you are doing 
 
@@ -46,7 +46,7 @@ class ISDataset(Dataset):
         if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop('Unnamed: 0', axis=1)
         self.config = config
-        self.dataset_config = Config(config.dataset_config_file) if config.dataset_config_file is not None else None
+        self.dataset_config = DataSetConfig(config.dataset_config_file) if config.dataset_config_file is not None else None
 
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
@@ -268,7 +268,7 @@ class rrISDataset(ISDataset):
         transformations = []
         normalization = self.dataset_config.normalization['func']
         if normalization != 'None':
-            if 'rr' self.dataset_config.rr_transform['symetrization']:
+            if self.dataset_config.rr_transform['symetrization']:
                 if normalization == 'means':
                     # mean of rr is 0
                     self.value_inf[var_dict['rr']] = np.zeros_like(self.value_inf[var_dict['rr']])
