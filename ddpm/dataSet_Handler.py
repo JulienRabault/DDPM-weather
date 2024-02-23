@@ -168,7 +168,7 @@ class MultiOptionNormalize(object):
                 self.gaussian_std = np.log(1 + self.gaussian_std)
         
         if np.ndim(self.value_sup) > 1:
-            ### preparing blur of constant normalization fields (for rr exclusively)
+            ### preparing blur of constant normalization fields (for rr exclusively)torch.abs(sample[:,var_dict['rr']].sub_(sample[:,var_dict['rr']] * mask_no_rr))
             if self.dataset_config.normalization['for_rr']['blur_iteration'] > 0:
                 gaussian_filter = np.float32([[1, 4,  6,  4,  1],
                                             [4, 16, 24, 16, 4],

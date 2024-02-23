@@ -9,3 +9,5 @@
 # run*
 # preproc.py
 *.pyc
+.idea
+model

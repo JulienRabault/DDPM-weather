@@ -3,10 +3,10 @@
   "mode": "Train",
   "run_name": "run_train",
   "batch_size": 4,
-  "any_time": 25,
+  "any_time": 5,
 
   # Sampling parameters
-  "ddim_timesteps": 500,
+  "ddim_timesteps": 50,
   "plot": true,
   "sampling_mode": "simple",
   "n_sample": 4,
@@ -30,9 +30,14 @@
   "resume": false,
   "epochs": 500,
   "beta_schedule": "linear",
+  "lr": 0.0001,
 
   # Tracking parameters
-  "wandbproject": "your_wandb_project",
+
+  # Tracking parameters
+  "use_mlflow": true, # activation mlflow log
+  "ml_tracking_uri": "../mlruns", # path to log mlflow
+  "ml_experiment_name": "ddpm", # experience name  "wandbproject": "your_wandb_project",
   "use_wandb": true,
   "entityWDB": "your_entity"
 }
