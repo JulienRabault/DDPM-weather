@@ -23,6 +23,7 @@ import torchvision.transforms as transforms
 import yaml
 from torch.utils.data import Dataset
 
+from utils.config import Config
 ################ reference dictionary to know what variables to sample where
 ################ do not modify unless you know what you are doing 
 
@@ -45,7 +46,7 @@ class ISDataset(Dataset):
         if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop('Unnamed: 0', axis=1)
         self.config = config
-        self.dataset_config = Dataset_config(config.dataset_config_file) if config.dataset_config_file is not None else None
+        self.dataset_config = Config(config.dataset_config_file) if config.dataset_config_file is not None else None
 
         self.CI = config.crop
         self.VI = [var_dict[var] for var in config.var_indexes]
@@ -86,18 +87,18 @@ class ISDataset(Dataset):
 
     def init_normalization(self):
         try:
-            Means = np.load(os.path.join(self.data_dir, self.config.mean_file))[self.VI]
-            Maxs = np.load(os.path.join(self.data_dir, self.config.max_file))[self.VI]
+            means = np.load(os.path.join(self.data_dir, self.config.mean_file))[self.VI]
+            maxs = np.load(os.path.join(self.data_dir, self.config.max_file))[self.VI]
         except (FileNotFoundError, KeyError):
             try:
-                Means = np.load(config.mean_file)[self.VI]
-                Maxs = np.load(config.max_file)[self.VI]
+                means = np.load(config.mean_file)[self.VI]
+                maxs = np.load(config.max_file)[self.VI]
             except (FileNotFoundError, KeyError):
                 raise ValueError(
                     'The mean_file and max_file must be specified in the parser using --mean_file and --max_file options')
 
-        means = list(tuple(Means))
-        stds = list(tuple((1.0 / 0.95) * (Maxs)))
+        means = list(tuple(means))
+        stds = list(tuple((1.0 / 0.95) * (maxs)))
     
         return stds, means
 
@@ -160,26 +161,26 @@ class MultiOptionNormalize(object):
         self.value_inf = value_inf
         self.dataset_config = dataset_config
         self.config = config
-        if 'rr' in self.config.var_indexes:
-            self.gaussian_std = self.dataset_config.rr_transform['gaussian_std']
-            if self.gaussian_std:
-                for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
-                    self.gaussian_std = np.log(1 + self.gaussian_std)
-                self.gaussian_std_map = np.random.choice([-1, 1], size=(self.config.image_size, self.config.image_size)) * self.gaussian_std
-                self.gaussian_noise = np.mod(np.random.normal(0, self.gaussian_std, size=(self.config.image_size, self.config.image_size)), self.gaussian_std_map)
+        self.gaussian_std = self.dataset_config.rr_transform['gaussian_std']
+        ### setting gaussian noise conditions
+        if self.gaussian_std:
+            for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+                self.gaussian_std = np.log(1 + self.gaussian_std)
+        
         if np.ndim(self.value_sup) > 1:
-            if 'rr' in self.config.var_indexes:
-                if self.dataset_config.normalization['for_rr']['blur_iteration'] > 0:
-                    gaussian_filter = np.float32([[1, 4,  6,  4,  1],
-                                                [4, 16, 24, 16, 4],
-                                                [6, 24, 36, 24, 6],
-                                                [4, 16, 24, 16, 4],
-                                                [1, 4,  6,  4,  1]]) / 256.0
-                    for _ in range(self.dataset_config.normalization['for_rr']['blur_iteration']):
-                        self.value_sup[0] = scipy.ndimage.convolve(self.value_sup[0], gaussian_filter, mode='mirror')
-            self.value_inf = torch.umpy(self.value_inf)
+            ### preparing blur of constant normalization fields (for rr exclusively)
+            if self.dataset_config.normalization['for_rr']['blur_iteration'] > 0:
+                gaussian_filter = np.float32([[1, 4,  6,  4,  1],
+                                            [4, 16, 24, 16, 4],
+                                            [6, 24, 36, 24, 6],
+                                            [4, 16, 24, 16, 4],
+                                            [1, 4,  6,  4,  1]]) / 256.0
+                for _ in range(self.dataset_config.normalization['for_rr']['blur_iteration']):
+                    self.value_sup[var_dict['rr']] = scipy.ndimage.convolve(self.value_sup[var_dict['rr']], gaussian_filter, mode='mirror')
+            self.value_inf = torch.from_numpy(self.value_inf)
             self.value_sup = torch.from_numpy(self.value_sup)
         else:
+            ### shaping normalization constants
             self.value_inf = torch.from_numpy(self.value_inf).view(-1, 1, 1)
             self.value_sup = torch.from_numpy(self.value_sup).view(-1, 1, 1)
 
@@ -188,59 +189,65 @@ class MultiOptionNormalize(object):
             raise TypeError(f'Input sample should be a torch tensor. Got {type(sample)}.')
         if sample.ndim < 3:
             raise ValueError(f'Expected sample to be a tensor image of size (..., C, H, W). Got tensor.size() = {sample.size()}.')
-        
-        if 'rr' in self.config.var_indexes:
-            for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
-                sample[0] = torch.log(1 + sample[0])
-            if self.dataset_config.rr_transform['symetrization'] and np.random.random() <= 0.5:
-                sample[0] = -sample[0]
-            if self.gaussian_std != 0:
-                mask_no_rr = (sample[0].numpy() <= self.gaussian_std)
-                sample[0] = sample[0].add_(from_numpy(self.gaussian_noise * mask_no_rr))
-        if self.dataset_config.normalization['type'] == 'mean':
+        ### transforming rain rates to logits (iterative transforms)
+        for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+            sample[var_dict['rr']] = torch.log(1 + sample[var_dict['rr']])
+        ### randomly symmetrizing rain rates around 0 (50% of rain rates are negative)
+        if self.dataset_config.rr_transform['symetrization'] and np.random.random() <= 0.5:
+            sample[var_dict['rr']] = -sample[var_dict['rr']]
+        ### adding random noise (AT RUNTIME) to rain rates below a certain threshold
+        if self.gaussian_std != 0:
+            gaussian_std_map = np.random.choice([-1, 1], size=(self.config.image_size, self.config.image_size)) * self.gaussian_std
+            gaussian_noise = np.mod(np.random.normal(0, self.gaussian_std, size=(self.config.image_size, self.config.image_size)), gaussian_std)
+            mask_no_rr = (sample[var_dict['rr']].numpy() <= self.gaussian_std)
+            sample[var_dict['rr']] = sample[var_dict['rr']].add_(from_numpy(gaussian_noise * mask_no_rr))
+        ### performing different types of normalization (centering around mean or capping min-max/quantiles)
+        if self.dataset_config.normalization['func'] == 'mean':
             sample = (sample - self.value_inf) / self.value_sup
-        elif self.dataset_config.normalization['type'] == 'minmax':
+        elif self.dataset_config.normalization['func'] in ['minmax','quant']:
             sample = -1 + 2 * ((sample - self.value_inf) / (self.value_sup - self.value_inf))
         return sample
 
     def denorm(self, sample):
+        """
+        revert the __call__ function to produce "physical space" samples
+        sample can be batched, and should be either of shape N x C X H x W or C x H x W
+        """
         if not isinstance(sample, torch.Tensor):
             raise TypeError(f'Input sample should be a torch tensor. Got {type(sample)}.')
         if sample.ndim < 3:
             raise ValueError(f'Expected sample to be a tensor image of size (..., C, H, W). Got tensor.size() = {sample.size()}.')
+
+        ### non-batched ops
         elif sample.ndim == 3:
-            if 'rr' in self.config.var_indexes:
-                for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
-                    sample[0] = torch.exp(sample[0]) - 1
-                if self.dataset_config.rr_transform['symetrization'] and np.random.random() <= 0.5:
-                    sample[0] = -sample[0]
-                if self.gaussian_std != 0:
-                    mask_no_rr = (sample[0].numpy() <= self.gaussian_std)
-                    sample[0] = sample[0].add_(from_numpy(self.gaussian_noise * mask_no_rr))
+            # reverting log transforms
+            for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+                sample[var_dict['rr']] = torch.exp(sample[var_dict['rr']]) - 1
+            # reverting symmetrization
+            if self.dataset_config.rr_transform['symetrization']:
+                sample[var_dict['rr']] = -sample[var_dict['rr']]
+            # reverting gaussian noise by setting below threshold to 0
+            if self.gaussian_std != 0:
+                mask_no_rr = (sample[var_dict['rr']].numpy() <= self.gaussian_std)
+                sample[var_dict['rr']] = torch.abs(sample[var_dict['rr']].sub_(sample[var_dict['rr']] * mask_no_rr))
+        ### batched ops
         else:
-            if 'rr' in self.config.var_indexes:
-                for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
-                    sample[:,0] = torch.exp(sample[:,0]) - 1.0
-                if self.dataset_config.rr_transform['symetrization']:
-                    sample[:,0] = torch.abs(sample[:,0])
-                if self.gaussian_std != 0:
-                    mask_no_rr = (sample[:,0].numpy() <= self.gaussian_std)
-                    sample[:,0] = sample[:,0].add_(from_numpy(self.gaussian_noise * mask_no_rr))
-        if self.dataset_config.normalization['type'] == 'mean':
+            # reverting log transforms
+            for _ in range(self.dataset_config.rr_transform['log_transform_iteration']):
+                sample[:,var_dict['rr']] = torch.exp(sample[:,var_dict['rr']]) - 1.0
+            # reverting symmetrization
+            if self.dataset_config.rr_transform['symetrization']:
+                sample[:,var_dict['rr']] = torch.abs(sample[:,var_dict['rr']])
+            # reverting gaussian noise by setting below threshold to 0
+            if self.gaussian_std != 0:
+                mask_no_rr = (sample[:,var_dict['rr']].numpy() <= self.gaussian_std)
+                sample[:,var_dict['rr']] = torch.abs(sample[:,var_dict['rr']].sub_(sample[:,var_dict['rr']] * mask_no_rr))
+        ### reverting normalizations
+        if self.dataset_config.normalization['func'] == 'mean':
             sample = sample * self.value_sup + self.value_inf
-        elif self.dataset_config.normalization['type'] == 'minmax':
+        elif self.dataset_config.normalization['func'] in ['minmax','quant']:
             sample = self.value_inf + 0.5 * (self.value_sup - self.value_inf) * ((sample + 1.0))
         return sample
-
-
-
-class Dataset_config:
-    def __init__(self, dataset_config_file):
-        # Load YAML configuration file and initialize logger
-        with open(dataset_config_file, 'r') as yaml_file:
-            yaml_config = yaml.safe_load(yaml_file)
-            for prop, value in yaml_config.items():
-                setattr(self, prop, value)
 
 class rrISDataset(ISDataset):
     def __init__(self, config, path, csv_file, add_coords=False):
@@ -259,9 +266,9 @@ class rrISDataset(ISDataset):
     
     def prepare_tranformations(self):
         transformations = []
-        normalization = self.dataset_config.normalization['type']
+        normalization = self.dataset_config.normalization['func']
         if normalization != 'None':
-            if 'rr' in self.config.var_indexes and self.dataset_config.rr_transform['symetrization']: #applying transformations on rr only if selected
+            if 'rr' self.dataset_config.rr_transform['symetrization']:
                 if normalization == 'means':
                     # mean of rr is 0
                     self.value_inf[var_dict['rr']] = np.zeros_like(self.value_inf[var_dict['rr']])
@@ -277,20 +284,29 @@ class rrISDataset(ISDataset):
         return detransform_func
 
     def init_normalization(self):
-        normalization_type = self.dataset_config.normalization['type']
-        if normalization_type == 'mean':
-            stds, means = self.load_stat_files(normalization_type, 'std', 'mean')
+        normalization_func = self.dataset_config.normalization['func']
+        if normalization_func == 'mean':
+            stds, means = self.load_stat_files(normalization_func, 'std', 'mean')
             return stds[self.VI] * 1.0 / 0.95, means[self.VI]
 
-        if normalization_type == 'minmax':
-            maxs, mins = self.load_stat_files(normalization_type, 'max', 'min')
+        if normalization_func == 'minmax':
+            maxs, mins = self.load_stat_files(normalization_func, 'max', 'min')
             return maxs[self.VI], mins[self.VI]
+        
+        if normalization_func == 'quant':
+            q99, q01 = self.load_stat_files(normalization_func, 'q99', 'q01')
+            return q99[self.VI], q01[self.VI]
 
         print('No normalization set')
         return None, None
 
-    def load_stat_files(self, normalization_type, str_sup, str_inf):
-        print(f'Normalization set to {normalization_type}')
+    def load_stat_files(self, normalization_func, str_sup, str_inf):
+        # Your normalization files should be name "[var]_[stat_version]_log_log_..._[ppx].npy" with:
+        #	var: 'min', 'max' or 'mean', 'std' or 'Q01', 'Q99' or 'Q10', Q90'
+        #	stat_version: an identifier for the stat file
+        #	log_log...: 'log_' will be repeated log_transform_iteration times
+        #	ppx: if the stats are per pixel, _ppx must be added at the end of the file
+        print(f'Normalization set to {normalization_func}')
         norm_vars = []
         for name in (str_sup, str_inf):
             filename = f'{name}_{self.dataset_config.stat_version}'
