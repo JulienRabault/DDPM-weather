@@ -200,7 +200,7 @@ def main_sample(config):
     model, _ = load_train_objs(config)
     sample_data = prepare_dataloader(config, path=config.data_dir, csv_file=config.csv_file)
     
-    sampler = Sampler(model, config, dataloader=sample_data)
+    sampler = Sampler(model, config, dataloader=sample_data,inversion_transforms=sample_data.dataset.inversion_transforms)
     sampler.sample()
 
 

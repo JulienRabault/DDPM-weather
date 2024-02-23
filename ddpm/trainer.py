@@ -15,7 +15,7 @@ from utils.distributed import is_main_gpu, synchronize
 
 class Trainer(Ddpm_base):
 
-    def __init__(self, model, config, dataloader=None, optimizer=None):
+    def __init__(self, model, config, dataloader=None, optimizer=None, inversion_transforms=None):
         """
         Initialize the Trainer class.
         Args:
@@ -24,7 +24,7 @@ class Trainer(Ddpm_base):
             dataloader: The data loader for training data.
             optimizer: The optimizer for model parameter updates.
         """
-        super().__init__(model, config, dataloader)
+        super().__init__(model, config, dataloader, inversion_transforms)
         self.optimizer = optimizer
         self.epochs_run = 0
         self.best_loss = float('inf')

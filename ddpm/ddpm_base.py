@@ -46,6 +46,7 @@ class Ddpm_base:
         # Set training dataset information
         self.train_dataset = self.dataloader.dataset #TODO : make the invert_norm function embedded in dataset
         if config.invert_norm:
+            assert inversion_transforms is not None
             self.transforms_func = inversion_transforms
         else:
             def transforms_func(x):

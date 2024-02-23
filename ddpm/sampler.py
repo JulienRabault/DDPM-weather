@@ -10,7 +10,7 @@ from utils.guided_loss import loss_dict
 
 
 class Sampler(Ddpm_base):
-    def __init__(self, model: torch.nn.Module, config, dataloader=None) -> None:
+    def __init__(self, model: torch.nn.Module, config, dataloader=None, inversion_transforms=None) -> None:
         """
         Initialize the Sampler class.
         Args:
@@ -18,7 +18,7 @@ class Sampler(Ddpm_base):
             config: Configuration settings for sampling.
             dataloader: The data loader for input data (optional).
         """
-        super().__init__(model, config, dataloader)
+        super().__init__(model, config, dataloader, inversion_transforms)
         self.loss_func = loss_dict["L1Loss"]
 
     def _simple_guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
