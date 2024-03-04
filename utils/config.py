@@ -1,12 +1,15 @@
 import json
 import logging
 import os
-
+from pathlib import Path
 import jsonschema as jsonschema
 import yaml
 
 from utils.distributed import is_main_gpu, get_rank_num, synchronize
 import datetime
+
+CONFIG_SCHEMA_PATH = "utils/config_schema.json"
+DATASET_CONFIG_SCHEMA_PATH = "utils/dataset_config_schema.json"
 
 
 def load_yaml(yaml_path):
@@ -68,9 +71,10 @@ class Config:
             schema = json.load(schema_file)
         jsonschema.validate(self.__dict__, schema)
         # Check specific conditions for certain configuration values
+        self.output_dir = Path(self.output_dir)
         if self.sampling_mode == "guided" or self.sampling_mode == "simple_guided":
             assert (
-                self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100
+                    self.guidance_loss_scale >= 0 and self.guidance_loss_scale <= 100
             ), "Guidance loss scale must be between 0 and 100."
             if self.data_dir is None:
                 raise ValueError(
@@ -89,10 +93,14 @@ class Config:
                 raise ValueError("--r flag can only be used in Train mode.")
         if self.any_time > self.epochs:
             if is_main_gpu():
-                self.logger.warning(
-                    f"any_time={self.any_time} is greater than epochs={self.epochs}. "
-                )
-
+                self.logger.warning(f"any_time={self.any_time} is greater than epochs={self.epochs}. ")
+        if "rr" in self.var_indexes:
+            if self.dataset_config_file is None:
+                raise ValueError("field dataset_config_file should not be None / should be spec'd if rr is among the "
+                                 "variables")
+        if self.dataset_config_file is not None and self.mean_file is not None or self.max_file is not None:
+            raise ValueError("mean_file and max_file should not be specified if dataset_config_file is specified, "
+                             "and vice versa")
         cond_n_sample = (
             self.batch_size
             if isinstance(self.batch_size, int)
@@ -108,14 +116,14 @@ class Config:
                 )
         # Check and create directories based on the configuration
         paths = [
-            f"{self.run_name}/",
-            f"{self.run_name}/samples/",
+            self.output_dir / self.run_name,
+            self.output_dir / self.run_name / "samples",
         ]
-        if self.mode == "Train":
-            paths.append(f"{self.run_name}/WANDB/")
-            paths.append(f"{self.run_name}/WANDB/cache")
+        if self.mode == 'Train':
+            paths.append(self.output_dir / self.run_name / "WANDB")
+            paths.append(self.output_dir / self.run_name / "WANDB/cache")
         self._next_run_dir(paths)
-        
+
         return
 
     def to_dict(self):
@@ -192,8 +200,8 @@ class Config:
                     while os.path.exists(train_name):
                         if f"_{train_num}" in train_name:
                             train_name = (
-                                "_".join(train_name.split("_")[:-1])
-                                + f"_{train_num + 1}"
+                                    "_".join(train_name.split("_")[:-1])
+                                    + f"_{train_num + 1}"
                             )
                             train_num += 1
                         else:
@@ -202,17 +210,17 @@ class Config:
             self.run_name = train_name
 
             paths = [
-                f"{self.run_name}/",
-                f"{self.run_name}/samples/",
+                self.output_dir / self.run_name,
+                self.output_dir / self.run_name / "samples",
             ]
-            if self.mode == "Train":
-                paths.append(f"{self.run_name}/WANDB/")
-                paths.append(f"{self.run_name}/WANDB/cache")
+            if self.mode == 'Train':
+                paths.append(self.output_dir / self.run_name / "WANDB/")
+                paths.append(self.output_dir / self.run_name / "WANDB/cache")
             synchronize()
             for path in paths:
                 os.makedirs(path, exist_ok=True)
 
-    def _update_from_config(self, yaml_path, overload:list):
+    def _update_from_config(self, yaml_path, overload: list):
         yaml_config = load_yaml(yaml_path)
         overload = [s.lstrip('-') for s in overload]
         for key, value in yaml_config.items():
@@ -222,3 +230,19 @@ class Config:
                 logging.warning(
                     f"Overloading {key} to {getattr(self, key)}"
                 )
+
+
+class DataSetConfig(Config):
+    def __init__(self, yaml_path):
+        # Load YAML configuration file and initialize logger
+        yaml_config = load_yaml(yaml_path)
+        for prop, value in yaml_config.items():
+            setattr(self, prop, value)
+
+        self._validate_config()
+
+    def _validate_config(self):
+        # Validate the configuration against a JSON schema
+        with open(DATASET_CONFIG_SCHEMA_PATH, 'r') as schema_file:
+            schema = json.load(schema_file)
+        jsonschema.validate(self.__dict__, schema)
