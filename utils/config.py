@@ -102,7 +102,7 @@ class Config:
             if self.dataset_config_file is None:
                 raise ValueError("field dataset_config_file should not be None / should be spec'd if rr is among the "
                                  "variables")
-        if self.dataset_config_file is not None and self.mean_file is not None or self.max_file is not None:
+        if self.dataset_config_file is not None and (self.mean_file is not None or self.max_file is not None):
             raise ValueError("mean_file and max_file should not be specified if dataset_config_file is specified, "
                              "and vice versa")
         cond_n_sample = (
@@ -152,14 +152,17 @@ class Config:
             yaml.dump(self.to_dict(), f)
 
     @classmethod
-    def from_args_and_yaml(cls, args, schema_path, modified_args):
+    def from_args_and_yaml(cls, args, modified_args):
         # Create a Config object from command line arguments and a YAML file
-        config = cls(args, schema_path, modified_args)
+        config = cls(args, CONFIG_SCHEMA_PATH, modified_args)
         return config
 
     @classmethod
-    def create_arguments(cls, parser, schema):
+    def create_arguments(cls, parser):
         # Dynamically create argparse arguments based on the schema
+        with open(CONFIG_SCHEMA_PATH, "r") as schema_file:
+            schema = json.load(schema_file)
+
         for prop, prop_schema in schema["properties"].items():
             try:
                 arg_type = TYPE_MAPPER.get(prop_schema.get("type", "str"), str)
