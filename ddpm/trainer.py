@@ -66,12 +66,6 @@ class Trainer(Ddpm_base):
                 batch[key] = batch[key].to(self.gpu_id)
         return batch
 
-    def _purge_batch_memory(self, batch):
-        for key in batch.keys():
-            if torch.is_tensor(batch[key]):
-                batch[key] = batch[key].detach().cpu()
-        del batch
-
     def _run_batch(self, batch):
         """
         Run a single training batch.
@@ -85,13 +79,6 @@ class Trainer(Ddpm_base):
         loss.backward()
         self.optimizer.step()
         loss = loss.detach().cpu()
-        if self.config.multiple:
-            # Delete all variables to prevent GPU memory leaks,
-            # and empty GPU cache
-            self._purge_batch_memory(batch)
-            torch.cuda.empty_cache()
-            # increase the computing time of ~10% : the price to prevent leakage
-
         return loss
 
     def _run_epoch(self, epoch):
@@ -294,10 +281,7 @@ class Trainer(Ddpm_base):
             self.logger.info(
                 f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
                 f"saved at {os.path.join(self.config.output_dir,f'{self.config.run_name}', 'best.pt')}")
-        # Delete all variables to prevent GPU memory leaks, and empty GPU cache
-        del self.model
-        del self.dataloader
-        torch.cuda.empty_cache()
+
 
     def sample_train(self, ep=None, nb_img=4, condition=None):
         """

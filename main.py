@@ -23,11 +23,6 @@ from utils.config import Config
 from utils.distributed import get_rank_num, get_rank, is_main_gpu, synchronize
 import numpy as np
 
-# list of parameters available for grid search
-# every parameters must be modified in config_schema.json
-# with "oneOf" to handle 2 types of variable.
-GRIDSEARCH_PARAM = ["batch_size", "lr", "beta_schedule"]
-
 warnings.filterwarnings(
     "ignore",
     message="This DataLoader will create .* worker processes in total.*",
@@ -185,12 +180,6 @@ def main_train(config):
     )
     trainer.train()
 
-    # Delete all variables to prevent GPU memory leaks
-    del model
-    del optimizer
-    del trainer
-    torch.cuda.empty_cache()
-
     end = time.time()
     total_time = end - start
     logging.debug(f"Training execution time: {total_time} seconds")
@@ -206,17 +195,11 @@ def main_train(config):
         logging.info(
             f"Training completed and best model sampled. You can check log and results in {config.run_name}"
         )
-        del sampler
-        del model
 
     except FileNotFoundError:
         logging.warning(
             f"The best model was not created or is not found in {config.run_name}."
         )
-
-    # Delete all variables to prevent GPU memory leaks
-    del train_data
-    torch.cuda.empty_cache()
 
 
 def main_sample(config):
@@ -234,26 +217,6 @@ def main_sample(config):
     data = sample_data if config.sampling_mode!="simple" else None
     sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
     sampler.sample()
-
-
-def cartesian_product(parameters):
-    keys = list(parameters.keys())
-    arrays = [np.asarray(parameters[key]) for key in keys]
-    cartesian_product_array = np.array(np.meshgrid(*arrays)).T.reshape(
-        -1, len(arrays)
-    )
-
-    result = []
-
-    for param_values in cartesian_product_array:
-        param_set = {
-            key: convert_to_type(value, parameters[key])
-            for key, value in zip(keys, param_values)
-        }
-        result.append(param_set)
-
-    return result
-
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):
@@ -285,78 +248,43 @@ if __name__ == "__main__":
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")
-    parser.add_argument(
-        "-m",
-        "--multiple",
-        action="store_true",
-        help="multiple sequential runs",
-    )
     args, modified_args = parser.parse_known_args()
-
-    if args.multiple:
-        schema_path = "utils/config_schema_multiple_runs.json"
-    else:
-        schema_path = "utils/config_schema.json"
-    with open(schema_path, "r") as schema_file:
-        schema = json.load(schema_file)
 
     ddp_setup()
 
-    Config.create_arguments(parser, schema)
+    Config.create_arguments(parser)
     default_args = parser.parse_args()
 
     config = Config.from_args_and_yaml(
-        default_args, schema_path, modified_args
+        default_args, modified_args
     )
-    param_values_list = [config.__getattribute__(p) for p in GRIDSEARCH_PARAM]
-    grid_search_dict = dict(zip(GRIDSEARCH_PARAM, param_values_list))
 
-    run_name = config.run_name
+    local_rank = get_rank()
 
-    if config.multiple:
-        logging.warning("*" * 80)
-        logging.warning("GRIDSEARCH COMBINAISONS :")
-        for el in cartesian_product(grid_search_dict):
-            logging.warning(f"- { el}")
-        logging.warning("*" * 80)
+    # Configure logging and synchronize processes
+    if not config.use_wandb:
+        os.environ["WANDB_MODE"] = "disabled"
+    else:
+        os.environ["WANDB_MODE"] = "offline"
+        os.environ["WANDB_CACHE_DIR"] = os.path.join(config.output_dir, config.run_name, "WANDB, cache")
+        os.environ["WANDB_DIR"] = os.path.join(config.output_dir, config.run_name, "WANDB")
+    synchronize()
+    setup_logger(config)
+    logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
-    for k, current_params in enumerate(cartesian_product(grid_search_dict)):
+    if is_main_gpu():
+        config.save(os.path.join(config.output_dir,config.run_name, "config.yml"))
+        logger.info(config)
+        logger.info(f"Mode {config.mode} selected")
 
-        if config.multiple:
-            logging.warning("\t" + "-" * 80)
-            logging.warning("\t" + f"COMBINAISON : {current_params}")
-            logging.warning("\t" + "-" * 80)
+    synchronize()
+    logger.debug(f"Local_rank: {local_rank}")
 
-        if k > 0:
-            config = Config.from_args_and_yaml(args, schema_path)
-        config._update_from_dict(current_params)
-
-        local_rank = get_rank()
-
-        # Configure logging and synchronize processes
-        if not config.use_wandb:
-            os.environ["WANDB_MODE"] = "disabled"
-        else:
-            os.environ["WANDB_MODE"] = "offline"
-            os.environ["WANDB_CACHE_DIR"] = f"{config.run_name}/WANDB/cache"
-            os.environ["WANDB_DIR"] = f"{config.run_name}/WANDB/"
-        synchronize()
-        setup_logger(config)
-        logger = logging.getLogger(f"logddp_{get_rank_num()}")
-
-        if is_main_gpu():
-            config.save(f"{config.run_name}/config_train.yml")
-            logger.info(config)
-            logger.info(f"Mode {config.mode} selected")
-
-        synchronize()
-        logger.debug(f"Local_rank: {local_rank}")
-
-        # Execute the main training or sampling function based on the mode
-        if config.mode == "Train":
-            main_train(config)
-        elif config.mode != "Train":
-            main_sample(config)
+    # Execute the main training or sampling function based on the mode
+    if config.mode == "Train":
+        main_train(config)
+    elif config.mode != "Train":
+        main_sample(config)
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():

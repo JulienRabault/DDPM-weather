@@ -234,6 +234,11 @@
       "type": "string",
       "default": "your_entity",
       "description": "Wandb entity name for logging"
+    },
+    "dataset_config_file": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Path to the dataset configuration file"
     }
   },
   "required": [

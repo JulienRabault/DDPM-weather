@@ -50,12 +50,16 @@ class Config:
         config_string = "Configuration:"
         for attr, value in self.to_dict().items():
             config_string += f"\n\t{attr}: {value}"
-        config_string += f"\n\tWANDB_MODE: {os.environ.get('WANDB_MODE', 'Not set')}\n"
+        config_string += (
+            f"\n\tWANDB_MODE: {os.environ.get('WANDB_MODE', 'Not set')}\n"
+        )
         return config_string
 
     def _update_from_args(self, args):
         # Update configuration attributes from command line arguments
-        logging.debug(f"Updating configuration from command line arguments: {args}")
+        logging.debug(
+            f"Updating configuration from command line arguments: {args}"
+        )
         logging.debug(f"Schema path: {self.schema_path}")
         for prop, value in args.__dict__.items():
             setattr(self, prop, value)
@@ -98,7 +102,7 @@ class Config:
             if self.dataset_config_file is None:
                 raise ValueError("field dataset_config_file should not be None / should be spec'd if rr is among the "
                                  "variables")
-        if self.dataset_config_file is not None and self.mean_file is not None or self.max_file is not None:
+        if self.dataset_config_file is not None and (self.mean_file is not None or self.max_file is not None):
             raise ValueError("mean_file and max_file should not be specified if dataset_config_file is specified, "
                              "and vice versa")
         cond_n_sample = (
@@ -148,19 +152,24 @@ class Config:
             yaml.dump(self.to_dict(), f)
 
     @classmethod
-    def from_args_and_yaml(cls, args, schema_path, modified_args):
+    def from_args_and_yaml(cls, args, modified_args):
         # Create a Config object from command line arguments and a YAML file
-        config = cls(args, schema_path, modified_args)
+        config = cls(args, CONFIG_SCHEMA_PATH, modified_args)
         return config
 
     @classmethod
-    def create_arguments(cls, parser, schema):
+    def create_arguments(cls, parser):
         # Dynamically create argparse arguments based on the schema
+        with open(CONFIG_SCHEMA_PATH, "r") as schema_file:
+            schema = json.load(schema_file)
+
         for prop, prop_schema in schema["properties"].items():
             try:
                 arg_type = TYPE_MAPPER.get(prop_schema.get("type", "str"), str)
             except:
-                arg_type = TYPE_MAPPER.get(prop_schema.get("type", "str")[0], str)
+                arg_type = TYPE_MAPPER.get(
+                    prop_schema.get("type", "str")[0], str
+                )
             arg_default = prop_schema.get("default", None)
             arg_help = prop_schema.get("description", None)
             if arg_type == list:
@@ -173,11 +182,17 @@ class Config:
                 )
             elif arg_type == bool:
                 parser.add_argument(
-                    f"--{prop}", default=arg_default, help=arg_help, action="store_true"
+                    f"--{prop}",
+                    default=arg_default,
+                    help=arg_help,
+                    action="store_true",
                 )
             else:
                 parser.add_argument(
-                    f"--{prop}", type=arg_type, default=arg_default, help=arg_help
+                    f"--{prop}",
+                    type=arg_type,
+                    default=arg_default,
+                    help=arg_help,
                 )
 
     def _next_run_dir(self, paths, suffix=None):
@@ -190,12 +205,16 @@ class Config:
                     )
 
         else:
-            current_datetime = datetime.datetime.now().strftime("%Y%m%d_%H%M%S%f")[:-3]
+            current_datetime = datetime.datetime.now().strftime(
+                "%Y%m%d_%H%M%S%f"
+            )[:-3]
             train_num = 1
             train_name = self.run_name
             while os.path.exists(train_name):
                 if suffix is not None:
-                    train_name = self.basename + "__" + suffix + "_" + current_datetime
+                    train_name = (
+                        self.basename + "__" + suffix + "_" + current_datetime
+                    )
                 else:
                     while os.path.exists(train_name):
                         if f"_{train_num}" in train_name:
@@ -222,7 +241,7 @@ class Config:
 
     def _update_from_config(self, yaml_path, overload: list):
         yaml_config = load_yaml(yaml_path)
-        overload = [s.lstrip('-') for s in overload]
+        overload = [s.lstrip("-") for s in overload]
         for key, value in yaml_config.items():
             if key not in overload:
                 setattr(self, key, value)

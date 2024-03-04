@@ -188,17 +188,6 @@ python main.py --yaml_path config_train.yml --model_path checkpoints/checkpoint.
 ```
 attention, `--model_path` et `--resume` peuvent etre simplement spécifié dans le fichier yaml.
 
-
-5. plusieur entrainements en séquentiel :
-
-```python
-python main.py -m --yaml_path config_sample.yml
-```
-
-avec dans le fichier de config yaml : 
-```"batch_size": [4,8,16],```
-pour tester plusieur configuration de batch_size par exemple. 
-
 ### Exemple de fichier de configuration YAML :
 
 ```yaml
