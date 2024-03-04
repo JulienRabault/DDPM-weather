@@ -1,5 +1,5 @@
 import csv
-import os.path
+import os
 import time
 from pathlib import Path
 
@@ -16,7 +16,7 @@ import mlflow
 
 class Trainer(Ddpm_base):
 
-    def __init__(self, model, config, dataloader=None, optimizer=None):
+    def __init__(self, model, config, dataloader=None, optimizer=None, inversion_transforms=None):
         """
         Initialize the Trainer class.
         Args:
@@ -25,7 +25,7 @@ class Trainer(Ddpm_base):
             dataloader: The data loader for training data.
             optimizer: The optimizer for model parameter updates.
         """
-        super().__init__(model, config, dataloader)
+        super().__init__(model, config, dataloader, inversion_transforms)
         self.optimizer = optimizer
         self.epochs_run = 0
         self.best_loss = float("inf")
@@ -245,24 +245,21 @@ class Trainer(Ddpm_base):
                 loop.set_postfix_str(
                     f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}"
                 )
-
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
-                    self._save_snapshot(
-                        epoch,
-                        os.path.join(f"{self.config.run_name}", "best.pt"),
+                    self._save_snapshot(epoch, os.path.join(
+                        self.config.output_dir,
+                        f"{self.config.run_name}", "best.pt",
                         avg_loss,
+                        )
                     )
-
                 if epoch % self.config.any_time == 0.0:
-                    self._save_snapshot(
-                        epoch,
-                        os.path.join(
-                            f"{self.config.run_name}", f"save_{epoch}.pt"
+                    self._save_snapshot(epoch, os.path.join(
+                        self.config.output_dir,
+                        f"{self.config.run_name}", f"save_{epoch}.pt"
                         ),
                         avg_loss,
                     )
-
                 log = {
                     "avg_loss": avg_loss.item(),
                     "lr": (
@@ -272,9 +269,11 @@ class Trainer(Ddpm_base):
                     ),
                 }
                 self._log(epoch, log)
-                self._save_snapshot(
-                    epoch,
-                    os.path.join(f"{self.config.run_name}", "last.pt"),
+
+                self._save_snapshot(epoch, os.path.join(
+                    self.config.output_dir,
+                    f"{self.config.run_name}", "last.pt"
+                    ),
                     avg_loss,
                 )
 
@@ -286,10 +285,8 @@ class Trainer(Ddpm_base):
                 mlflow.end_run()
 
             self.logger.info(
-                f"Training finished , best loss : {self.best_loss:.6f}, lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}, "
-                f"saved at {os.path.join(f'{self.config.run_name}', 'best.pt')}"
-            )
-
+                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
+                f"saved at {os.path.join(self.config.output_dir,f'{self.config.run_name}', 'best.pt')}")
         # Delete all variables to prevent GPU memory leaks, and empty GPU cache
         del self.model
         del self.dataloader
@@ -316,19 +313,14 @@ class Trainer(Ddpm_base):
         self.logger.info(f"Sampling {nb_img} images...")
         samples = super()._sample_batch(nb_img=nb_img, condition=condition)
         for i, img in enumerate(samples):
-            filename = (
-                f"_sample_{ep}_{i}.npy"
-                if ep is not None
-                else f"_sample_{i}.npy"
-            )
-            save_path = os.path.join(self.config.run_name, "samples", filename)
+            filename = f"_sample_{ep}_{i}.npy" if ep is not None else f"_sample_{i}.npy"
+            save_path = os.path.join(self.config.output_dir, self.config.run_name, "samples", filename)
             np.save(save_path, img)
         if self.config.plot:
             self.plot_grid(f"samples_grid_{ep}.jpg", samples)
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.run_name}/samples/"
-        )
-
+            f"Sampling done. Images saved in {os.path.join(self.config.output_dir, self.config.run_name, 'samples')}"
+            )
     def _log(self, epoch, log_dict):
         """
         Log training metrics.
@@ -345,9 +337,9 @@ class Trainer(Ddpm_base):
         if self.config.use_mlflow:
             mlflow.log_metrics(log_dict, step=epoch)
 
-        csv_filename = os.path.join(
-            f"{self.config.run_name}", "logs_train.csv"
-        )
+        csv_filename = os.path.join(self.config.output_dir,
+            f"{self.config.run_name}", "logs_train.csv")
+        
         file_exists = Path(csv_filename).is_file()
         with open(
             csv_filename, "a" if file_exists else "w", newline=""

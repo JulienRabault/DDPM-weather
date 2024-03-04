@@ -65,7 +65,9 @@ def setup_logger(config, log_file="ddpm.log", use_wandb=False):
 
     # File handler for saving log messages to a file
     file_handler = logging.FileHandler(
-        os.path.join(config.run_name, log_file), mode="w+"
+        os.path.join(
+          config.output_dir, config.run_name, log_file
+        ), mode='w+'
     )
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
@@ -137,7 +139,11 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
         DataLoader: Data loader.
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
-    train_set = dataSet_Handler.ISDataset(config, path, csv_file)
+    # different preprocessing strategies if we have to deal with rain rates ("rr")
+    if "rr" in config.var_indexes: #TODO :  make the "var_indexes" be "variables"
+        train_set = dataSet_Handler.rrISDataset(config, path, csv_file)
+    else:
+        train_set = dataSet_Handler.ISDataset(config, path, csv_file)
     return DataLoader(
         train_set,
         batch_size=config.batch_size,
@@ -172,8 +178,10 @@ def main_train(config):
         ),
     )
     start = time.time()
+    if config.invert_norm:
+        invert_tf = train_data.dataset.inversion_transforms
     trainer = Trainer(
-        model, config, dataloader=train_data, optimizer=optimizer
+        model, config, dataloader=train_data, optimizer=optimizer, inversion_transforms=invert_tf
     )
     trainer.train()
 
@@ -190,10 +198,10 @@ def main_train(config):
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
     config.model_path = os.path.join(config.run_name, "best.pt")
-
+    
     try:
         model, _ = load_train_objs(config)
-        sampler = Sampler(model, config, dataloader=sample_data)
+        sampler = Sampler(model, config, dataloader=sample_data, inversion_transforms=train_data.dataset.inversion_transforms)
         sampler.sample(filename_format="sample_best_{i}.npy")
         logging.info(
             f"Training completed and best model sampled. You can check log and results in {config.run_name}"
@@ -219,13 +227,12 @@ def main_sample(config):
     """
     # Load the model and start the sampling process
     model, _ = load_train_objs(config)
-    if config.sampling_mode != "simple":
-        sample_data = prepare_dataloader(
+    sample_data = prepare_dataloader(
             config, path=config.data_dir, csv_file=config.csv_file
         )
-    else:
-        sample_data = None
-    sampler = Sampler(model, config, dataloader=sample_data)
+    inversion_tf = sample_data.dataset.inversion_transforms
+    data = sample_data if config.sampling_mode!="simple" else None
+    sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
     sampler.sample()
 
 

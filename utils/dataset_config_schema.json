@@ -1,0 +1,61 @@
+{
+    "type": "object",
+    "properties": {
+        "stat_folder": {
+        "type": "string",
+        "default": "",
+        "description": "Where the files used to define normalisation statistics are located"
+        },
+        "stat_version": {
+        "type": "string",
+        "default": "rr",
+        "description": "Whether the stat files incorporate rainfall"
+        },
+        "rr_transform": {
+        "log_transform_iteration": {
+            "type": "integer",
+            "default": 1,
+            "description" : "How many transforms of type x-> log(1+x) are applied on rainfalll data"
+        },
+        "symetrization":{
+            "type": "boolean",
+            "default": false,
+            "description": "If the rr skewed variable should be randomly symetrized (adding - signs) during training"
+        },
+        "gaussian_std":{
+            "type": "integer",
+            "default": 0,
+            "description" : "Whether to add pointwise gaussian noise below a certain threshold"
+        }
+        },
+        "normalization":{
+        "func":{
+            "type": "string",
+            "enum": [
+                "minmax",
+                "mean",
+                "quant"
+            ],
+            "default": "minmax",
+            "description": "Which type of normalization is performed on all variables (using minmax --> min and max // mean --> mean and |max-mean| // quant --> Q01 and Q99)"
+            },
+        "per_pixel":{
+            "type": "boolean",
+            "default": false,
+            "description": "Whether normalization is performed used global scalars, or constant grids"
+            },
+        "for_rr": {
+            "blur_iteration":{
+                "type": "integer",
+                "default": 1,
+                "description": "Whether per_pixel constant grids should be blurred with gaussian kernel, and how many times. Applied only if per_pixel is true."
+            }
+        }
+    }
+    },
+    "required": [
+        "stat_folder",
+        "stat_version",
+        "rr_transform"
+    ]
+}

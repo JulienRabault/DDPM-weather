@@ -81,6 +81,11 @@
       "default": null,
       "description": "Directory containing the input data"
     },
+    "output_dir": {
+      "type": "string",
+      "default": "",
+      "description": "Directory where the output data is saved"
+    },
     "csv_file": {
       "type": [
         "string",
@@ -123,20 +128,20 @@
       "default": false,
       "description": "Invert normalization of input image samples"
     },
+    "mean_file": {
+       "type": ["string", "null"],
+       "default": null,
+       "description": "Constant mean file for normalisation (overriden by dataset_handler_config if latter is used)"
+    },
+    "max_file": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Constant max file for normalisation (overriden by dataset_handler_config if latter is used)"
+   },
     "image_size": {
       "type": "integer",
       "default": 128,
       "description": "Size of the input image"
-    },
-    "mean_file": {
-      "type": "string",
-      "default": "mean_file.npy",
-      "description": "Path to the file containing mean values for normalization"
-    },
-    "max_file": {
-      "type": "string",
-      "default": "max_file.npy",
-      "description": "Path to the file containing maximum values for normalization"
     },
     "scheduler": {
       "type": "boolean",
@@ -204,6 +209,11 @@
       ],
       "default": "linear",
       "description": "Type of beta schedule (cosine or linear)"
+    },
+    "dataset_handler_config": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Yaml configuration file for dataset handler"
     },
     "wandbproject": {
       "type": "string",

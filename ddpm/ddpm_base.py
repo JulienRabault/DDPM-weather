@@ -12,8 +12,11 @@ from utils.distributed import get_rank, is_main_gpu, get_rank_num
 
 class Ddpm_base:
     def __init__(
-        self, model: torch.nn.Module, config, dataloader=None
-    ) -> None:
+            self,
+            model: torch.nn.Module,
+            config,
+            dataloader=None,
+            inversion_transforms=None) -> None:
         """
         Initialize the Trainer.
         Args:
@@ -41,31 +44,16 @@ class Ddpm_base:
         model.to(torch.device(self.gpu_id))
 
         # Set training dataset information
-        if self.dataloader is not None:
-            self.train_dataset = self.dataloader.dataset
-            self.stds = self.train_dataset.stds
-            self.means = self.train_dataset.means
-
-        # Set data transformation function based on configuration
         if config.invert_norm:
-            self.transforms_func = transforms.Compose(
-                [
-                    transforms.Normalize(
-                        mean=[0.0] * len(self.config.var_indexes),
-                        std=[1 / el for el in self.stds],
-                    ),
-                    transforms.Normalize(
-                        mean=[-el for el in self.means],
-                        std=[1.0] * len(self.config.var_indexes),
-                    ),
-                ]
-            )
+            if inversion_transforms is not None:
+                self.transforms_func = inversion_transforms
         else:
 
             def transforms_func(x):
                 return x
 
             self.transforms_func = transforms_func
+
         # if torch.__version__ >= "2.0.0":
         #     try:
         #         self.model = torch.compile(self.model)
