@@ -252,7 +252,6 @@ class Trainer(Ddpm_base):
                 loop.set_postfix_str(
                     f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}"
                 )
-
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
                     self._save_snapshot(epoch, os.path.join(
@@ -261,7 +260,6 @@ class Trainer(Ddpm_base):
                         avg_loss,
                         )
                     )
-
                 if epoch % self.config.any_time == 0.0:
                     self._save_snapshot(epoch, os.path.join(
                         self.config.output_dir,

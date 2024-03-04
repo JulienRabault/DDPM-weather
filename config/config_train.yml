@@ -35,8 +35,6 @@
   "lr": 0.0001,
 
   # Tracking parameters
-
-  # Tracking parameters
   "use_mlflow": true, # activation mlflow log
   "ml_tracking_uri": "../mlruns", # path to log mlflow
   "ml_experiment_name": "ddpm", # experience name  "wandbproject": "your_wandb_project",
