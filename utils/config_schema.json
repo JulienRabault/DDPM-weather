@@ -128,6 +128,16 @@
       "default": false,
       "description": "Invert normalization of input image samples"
     },
+    "mean_file": {
+       "type": ["string", "null"],
+       "default": null,
+       "description": "Constant mean file for normalisation (overriden by dataset_handler_config if latter is used)"
+    },
+    "max_file": {
+      "type": ["string", "null"],
+      "default": null,
+      "description": "Constant max file for normalisation (overriden by dataset_handler_config if latter is used)"
+   },
     "image_size": {
       "type": "integer",
       "default": 128,

@@ -20,6 +20,8 @@
   "var_indexes": [ "u", "v", "t2m" ],
   "crop": [ 0,256,0,256 ],
   "invert_norm": false,
+  "mean_file": $data_dir/path/to/your_mean_file.npy
+  "max_file": $data_dir/path/to/your_max_file.npy
   "image_size": 256,
   "guiding_col": "your_guiding_column",
   "dataset_handler_config": "/path/to/your/dataset_handler_config.yml",

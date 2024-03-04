@@ -44,7 +44,6 @@ class Ddpm_base:
         model.to(torch.device(self.gpu_id))
 
         # Set training dataset information
-        self.train_dataset = self.dataloader.dataset #TODO : make the invert_norm function embedded in dataset
         if config.invert_norm:
             if inversion_transforms is not None:
                 self.transforms_func = inversion_transforms
@@ -55,7 +54,6 @@ class Ddpm_base:
 
             self.transforms_func = transforms_func
 
-        # Set data transformation function based on configuration # TODO: ici Basile, ici incompatible avec mes modifs, j'ai une class Detransform si tu veux qu'on peut essayer d'adapter
         # if torch.__version__ >= "2.0.0":
         #     try:
         #         self.model = torch.compile(self.model)
