@@ -154,8 +154,8 @@ class Trainer(Ddpm_base):
             "TIMESTAMP": self.timesteps,
             "GUIDED_DIFFUSION": self.guided_diffusion,
             "DATA": {
-                "STDS": self.stds,
-                "MEANS": self.means,
+                # "STDS": self.stds,
+                # "MEANS": self.means,
                 "V_IDX": self.config.var_indexes,
                 "CROP": self.config.crop,
             },
@@ -204,9 +204,7 @@ class Trainer(Ddpm_base):
         experiment = mlflow.get_experiment_by_name(experiment_name)
         if experiment is None:
             mlflow.create_experiment(experiment_name)
-
         mlflow.start_run(nested=True, run_name=self.config.run_name)
-
         mlflow.log_params(self.config.to_dict())
 
     def train(self):
@@ -243,10 +241,9 @@ class Trainer(Ddpm_base):
                     self.best_loss = avg_loss
                     self._save_snapshot(epoch, os.path.join(
                         self.config.output_dir,
-                        f"{self.config.run_name}", "best.pt",
+                        f"{self.config.run_name}", "best.pt"),
                         avg_loss,
                         )
-                    )
                 if epoch % self.config.any_time == 0.0:
                     self._save_snapshot(epoch, os.path.join(
                         self.config.output_dir,
@@ -312,6 +309,7 @@ class Trainer(Ddpm_base):
         self.logger.info(
             f"Sampling done. Images saved in {os.path.join(self.config.output_dir, self.config.run_name, 'samples')}"
             )
+        
     def _log(self, epoch, log_dict):
         """
         Log training metrics.

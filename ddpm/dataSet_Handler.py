@@ -21,6 +21,7 @@ import scipy.ndimage
 import torch
 import torchvision.transforms as transforms
 import yaml
+from torch import from_numpy
 from torch.utils.data import Dataset
 
 from utils.config import DataSetConfig
@@ -54,17 +55,18 @@ class ISDataset(Dataset):
 
         # Group labels by guiding column if specified
         if self.config.guiding_col is not None:
-            self.ensembles = self.labels.groupby([self.config.guiding_col]).agg(lambda x: x)
-            self.ensembles = self.ensembles["Name"]
-
+            self.ensembles = self.labels.groupby(
+                [self.config.guiding_col])
         # Add positional encoding
         self.add_coords = add_coords
 
         # Depending on the normalization, value_sup is max or std or Q90... value_min is min or mean or Q10...
         self.value_sup, self.value_inf = self.init_normalization()
+        self.means = self.value_inf
+        self.stds = self.value_sup
 
         transformations = self.prepare_tranformations()
-        self.transform = transforms.Compose(transformations)
+        self.transform = transformations
     
     def prepare_tranformations(self):
         
@@ -91,8 +93,8 @@ class ISDataset(Dataset):
             maxs = np.load(os.path.join(self.data_dir, self.config.max_file))[self.VI]
         except (FileNotFoundError, KeyError):
             try:
-                means = np.load(config.mean_file)[self.VI]
-                maxs = np.load(config.max_file)[self.VI]
+                means = np.load(self.config.mean_file)[self.VI]
+                maxs = np.load(self.config.max_file)[self.VI]
             except (FileNotFoundError, KeyError):
                 raise ValueError(
                     'The mean_file and max_file must be specified in the parser using --mean_file and --max_file options')
@@ -126,9 +128,11 @@ class ISDataset(Dataset):
         if self.ensembles is not None:
             ensemble_id = self.labels.loc[idx, self.config.guiding_col]
             try:
-                ensemble = self.ensembles[ensemble_id].tolist()
-                ensemble.remove(self.labels.iloc[idx, 0])
-                ens = random.sample(ensemble, 1)
+                #TODO : a opti
+                group = self.labels[self.labels['ensemble_id'] == ensemble_id]
+                group_ensemble = group[group['Name'] != self.labels.iloc[idx, 0]]
+                row = group_ensemble.sample(n=1)
+                ens = row['Name'].values[0]
             except:
                 ens = self.ensembles[ensemble_id]
             condition = self.file_to_torch(ens)
@@ -198,7 +202,8 @@ class MultiOptionNormalize(object):
         ### adding random noise (AT RUNTIME) to rain rates below a certain threshold
         if self.gaussian_std != 0:
             gaussian_std_map = np.random.choice([-1, 1], size=(self.config.image_size, self.config.image_size)) * self.gaussian_std
-            gaussian_noise = np.mod(np.random.normal(0, self.gaussian_std, size=(self.config.image_size, self.config.image_size)), gaussian_std)
+            gaussian_noise = np.mod(np.random.normal(0, self.gaussian_std, size=(self.config.image_size, self.config.image_size)),
+                                    self.gaussian_std)
             mask_no_rr = (sample[var_dict['rr']].numpy() <= self.gaussian_std)
             sample[var_dict['rr']] = sample[var_dict['rr']].add_(from_numpy(gaussian_noise * mask_no_rr))
         ### performing different types of normalization (centering around mean or capping min-max/quantiles)
@@ -302,10 +307,10 @@ class rrISDataset(ISDataset):
 
     def load_stat_files(self, normalization_func, str_sup, str_inf):
         # Your normalization files should be name "[var]_[stat_version]_log_log_..._[ppx].npy" with:
-        #	var: 'min', 'max' or 'mean', 'std' or 'Q01', 'Q99' or 'Q10', Q90'
-        #	stat_version: an identifier for the stat file
-        #	log_log...: 'log_' will be repeated log_transform_iteration times
-        #	ppx: if the stats are per pixel, _ppx must be added at the end of the file
+        #   var: 'min', 'max' or 'mean', 'std' or 'Q01', 'Q99' or 'Q10', Q90'
+        #   stat_version: an identifier for the stat file
+        #   log_log...: 'log_' will be repeated log_transform_iteration times
+        #   ppx: if the stats are per pixel, _ppx must be added at the end of the file
         print(f'Normalization set to {normalization_func}')
         norm_vars = []
         for name in (str_sup, str_inf):

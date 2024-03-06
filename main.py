@@ -175,6 +175,8 @@ def main_train(config):
     start = time.time()
     if config.invert_norm:
         invert_tf = train_data.dataset.inversion_transforms
+    else:
+        invert_tf = None
     trainer = Trainer(
         model, config, dataloader=train_data, optimizer=optimizer, inversion_transforms=invert_tf
     )
