@@ -37,7 +37,7 @@
   
   # Tracking parameters
   "use_mlflow": true, # activation mlflow log
-  "ml_tracking_uri": "../../commun/commun/logs/mlruns", # path to log mlflow
+  "ml_tracking_uri": /ddpm/logs/mlruns, #path to log mlflow in the singularity container
   "ml_experiment_name": "ddpm", # experience name
 
   "wandbproject": "your_wandb_project",
