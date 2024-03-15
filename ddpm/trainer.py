@@ -8,6 +8,7 @@ import torch
 import wandb
 from torch import distributed as dist
 from tqdm import tqdm
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu, synchronize
@@ -32,16 +33,17 @@ class Trainer(Ddpm_base):
         self.guided_diffusion = self.config.guiding_col is not None
         if self.config.scheduler:
             # Use a learning rate scheduler if specified in the configuration
-            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-                optimizer,
-                max_lr=self.config.lr,
-                epochs=self.config.scheduler_epoch,
-                steps_per_epoch=len(self.dataloader),
-                anneal_strategy="cos",
-                pct_start=0.1,
-                div_factor=15.0,
-                final_div_factor=1500.0,
-            )
+            # self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+            #     optimizer,
+            #     max_lr=self.config.lr,
+            #     epochs=self.config.scheduler_epoch,
+            #     steps_per_epoch=len(self.dataloader),
+            #     anneal_strategy="cos",
+            #     pct_start=0.1,
+            #     div_factor=15.0,
+            #     final_div_factor=1500.0,
+            # )
+            self.scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
         else:
             self.scheduler = None
 
@@ -111,16 +113,19 @@ class Trainer(Ddpm_base):
             loss = self._run_batch(batch_prep)
             total_loss += loss
 
-            if self.config.scheduler:
-                self.scheduler.step()
+            # if self.config.scheduler:
+            #     self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
 
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
-            f"Lr : {self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr}"
+            f"Lr : {self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr}"
         )
+        
+        if self.config.scheduler:
+            self.scheduler.step(total_loss / len(self.dataloader))
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
             condition = None
@@ -235,7 +240,7 @@ class Trainer(Ddpm_base):
             avg_loss = self._run_epoch(epoch)
             if is_main_gpu():
                 loop.set_postfix_str(
-                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}"
+                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr):.6f}"
                 )
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
@@ -254,7 +259,7 @@ class Trainer(Ddpm_base):
                 log = {
                     "avg_loss": avg_loss.item(),
                     "lr": (
-                        self.scheduler.get_last_lr()[0]
+                        self.optimizer.param_groups[0]['lr']
                         if self.config.scheduler
                         else self.config.lr
                     ),
@@ -276,7 +281,7 @@ class Trainer(Ddpm_base):
                 mlflow.end_run()
 
             self.logger.info(
-                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.scheduler.get_last_lr()[0]}, "
+                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{self.optimizer.param_groups[0]['lr']}, "
                 f"saved at {os.path.join(self.config.output_dir,f'{self.config.run_name}', 'best.pt')}")
 
 

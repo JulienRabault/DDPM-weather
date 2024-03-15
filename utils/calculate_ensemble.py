@@ -2,6 +2,8 @@ import argparse
 import pandas as pd
 import os
 
+from tqdm import tqdm
+
 """
 Calculate the ensemble from a .csv file (IS_method_labels.csv),
 and save the new csv tables in  IS_method_labels_ens.csv
@@ -35,7 +37,7 @@ def process_data(full_path):
         # init the list of ensembles for each sample
         ensembles = [None] * len(df)
         leadtimemax = df["LeadTime"].max() + 1
-        for date in list_dates_unique:  # for each unique date
+        for date in tqdm(list_dates_unique, ):  # for each unique date
             for j in range(leadtimemax):  # for each LeadTime between 0 and 7
                 # get idx of all samples with the same date and leadtime
                 idx = df.loc[

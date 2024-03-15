@@ -21,6 +21,7 @@ class Sampler(Ddpm_base):
         super().__init__(model, config, dataloader, inversion_transforms)
         self.loss_func = loss_dict["L1Loss"]
 
+    @torch.no_grad()
     def _simple_guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
         """
         Perform guided sampling of a batch of images.
@@ -50,6 +51,7 @@ class Sampler(Ddpm_base):
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
         return sampled_images_unnorm
 
+    @torch.no_grad()
     def sample(self, filename_format="_sample_{i}.npy"):
         """
         Generate and save sample images during training.
@@ -67,24 +69,30 @@ class Sampler(Ddpm_base):
             dataloader_iter = iter(self.dataloader)
         b = 0
         with tqdm(total=self.config.n_sample // self.config.batch_size, desc="Sampling ", unit="batch",
-                  disable=is_main_gpu()) as pbar:
+                  disable= not is_main_gpu()) as pbar:
             while b < self.config.n_sample:
                 batch_size = min(self.config.n_sample - b, self.config.batch_size)
                 if self.config.sampling_mode == "simple":
                     samples = super()._sample_batch(nb_img=batch_size)
-                elif self.config.sampling_mode == "guided":
-                    cond = next(dataloader_iter)['img'][:batch_size].to(self.gpu_id)
-                    samples = self._sample_batch(nb_img=batch_size, condition=cond)
-                elif self.config.sampling_mode == "simple_guided":
-                    cond = next(dataloader_iter)['img'][:batch_size].to(self.gpu_id)
-                    samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
+                    for s in samples:
+                        filename = filename_format.format(i=str(i))
+                        save_path = os.path.join(self.config.run_name, "samples", filename)
+                        np.save(save_path, s)
+                        i += max(torch.cuda.device_count(), 1)
+                elif "guided" in self.config.sampling_mode:
+                    batch = next(dataloader_iter)
+                    cond = batch['img'][:batch_size].to(self.gpu_id)
+                    ids = batch['img_id'][:batch_size]
+                    if self.config.sampling_mode == "guided":
+                        samples = self._sample_batch(nb_img=batch_size, condition=cond)
+                    elif self.config.sampling_mode == "simple_guided":
+                        samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
+                    for s, img_id in zip(samples, ids):
+                        filename = filename_format.format(i=img_id)
+                        save_path = os.path.join(self.config.run_name, "samples", filename)
+                        np.save(save_path, s)
                 else:
                     raise ValueError(f"Sampling mode {self.config.sampling_mode} not supported.")
-                for s in samples:
-                    filename = filename_format.format(i=str(i))
-                    save_path = os.path.join(self.config.run_name, "samples", filename)
-                    np.save(save_path, s)
-                    i += max(torch.cuda.device_count(), 1)
                 b += batch_size
                 pbar.update(1)
 

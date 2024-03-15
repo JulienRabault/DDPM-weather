@@ -127,14 +127,11 @@ class ISDataset(Dataset):
         # Get conditional sample if ensembles are specified
         if self.ensembles is not None:
             ensemble_id = self.labels.loc[idx, self.config.guiding_col]
-            try:
-                #TODO : a opti
-                group = self.labels[self.labels['ensemble_id'] == ensemble_id]
-                group_ensemble = group[group['Name'] != self.labels.iloc[idx, 0]]
-                row = group_ensemble.sample(n=1)
-                ens = row['Name'].values[0]
-            except:
-                ens = self.ensembles[ensemble_id]
+            #TODO : a opti
+            group = self.labels[self.labels['ensemble_id'] == ensemble_id]
+            group_ensemble = group[group['Name'] != self.labels.iloc[idx, 0]]
+            row = group_ensemble.sample(n=1)
+            ens = row['Name'].values[0]
             condition = self.file_to_torch(ens)
         else:
             condition = torch.empty(0)

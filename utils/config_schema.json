@@ -239,6 +239,11 @@
       "type": ["string", "null"],
       "default": null,
       "description": "Path to the dataset configuration file"
+    },
+    "n_ensemble": {
+      "type": "integer",
+      "default": 1,
+      "description": "Number of ensemble members"
     }
   },
   "required": [

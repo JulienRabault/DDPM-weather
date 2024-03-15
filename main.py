@@ -100,14 +100,15 @@ def load_train_objs(config):
     Returns:
         tuple: model, optimizer.
     """
+    use_cond = config.guiding_col is not None and config.mode == "Train" or config.mode == "Sample" and "guided" in config.sampling_mode
     # Create a U-Net model and a diffusion model based on configuration
     umodel = Unet(
         dim=64,
         dim_mults=(1, 2, 4, 8),
         channels=len(config.var_indexes),
-        self_condition=config.guiding_col is not None,
+        self_condition=use_cond,
     )
-    if config.guiding_col is not None:
+    if use_cond :
         cls = GuidedGaussianDiffusion
     else:
         cls = GaussianDiffusion
@@ -218,7 +219,9 @@ def main_sample(config):
     inversion_tf = sample_data.dataset.inversion_transforms
     data = sample_data if config.sampling_mode!="simple" else None
     sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
-    sampler.sample()
+    for i in range(config.n_ensemble):
+        file_format = "fake_sample_{i}_" + str(i) + ".npy"
+        sampler.sample(filename_format=file_format)
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):
