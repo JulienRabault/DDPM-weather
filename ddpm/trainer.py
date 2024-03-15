@@ -123,6 +123,16 @@ class Trainer(Ddpm_base):
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
 
+            log = {
+                "avg_loss_it": avg_loss.item(),
+                "lr_it": (
+                    self.scheduler.get_last_lr()[0]
+                    if self.config.scheduler
+                    else self.config.lr
+                ),
+            }
+            self._log(i, log)
+
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
