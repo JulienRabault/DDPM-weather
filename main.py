@@ -149,7 +149,7 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
         train_set,
         batch_size=config.batch_size,
         pin_memory=True,
-        persistent_workers=True,
+        # persistent_workers=True,
         # non_blocking=True,
         shuffle=not torch.cuda.device_count() >= 2,
         num_workers=cpu_count() if num_workers is None else num_workers,
@@ -160,7 +160,7 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
             if torch.cuda.device_count() >= 2
             else None
         ),
-        drop_last=True,
+        # drop_last=True,
     )
 
 
