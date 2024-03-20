@@ -61,6 +61,7 @@ def setup_logger(config, log_file="ddpm.log", use_wandb=False):
     # File handler for saving log messages to a file
     file_handler = logging.FileHandler(
         os.path.join(config.output_dir, config.run_name, log_file), mode="w+"
+        os.path.join(config.output_dir, config.run_name, log_file), mode="w+"
     )
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
@@ -240,6 +241,7 @@ def main_sample(config):
     for i in range(config.n_ensemble):
         file_format = "fake_sample_{i}_" + str(i) + ".npy"
         sampler.sample(filename_format=file_format)
+
 
 
 def convert_to_type(value, type_list):
