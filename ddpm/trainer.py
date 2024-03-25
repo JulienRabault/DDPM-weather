@@ -38,21 +38,20 @@ class Trainer(Ddpm_base):
         self.epochs_run = 0
         self.best_loss = float("inf")
         self.guided_diffusion = self.config.guiding_col is not None
-        if self.config.scheduler:
-            # Use a learning rate scheduler if specified in the configuration
-            # self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
-            #     optimizer,
-            #     max_lr=self.config.lr,
-            #     epochs=self.config.scheduler_epoch,
-            #     steps_per_epoch=len(self.dataloader),
-            #     anneal_strategy="cos",
-            #     pct_start=0.1,
-            #     div_factor=15.0,
-            #     final_div_factor=1500.0,
-            # )
+        if self.config.scheduler is True:
             self.scheduler = ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=5, verbose=True
             )
+        elif self.config.scheduler == "OneCycleLR":
+            self.scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=self.config.lr,
+                epochs=self.config.scheduler_epoch,
+                steps_per_epoch=len(dataloader),
+                anneal_strategy="cos",
+                pct_start=0.1,
+            )
+
         else:
             self.scheduler = None
 
@@ -115,6 +114,8 @@ class Trainer(Ddpm_base):
             disable=not is_main_gpu(),
         )
         for i, batch in loop:
+            print("i", i)
+            print("batch", batch["img"].shape)
             needs_keys = ["img"] + (
                 ["condition"] if self.guided_diffusion else []
             )
@@ -131,7 +132,7 @@ class Trainer(Ddpm_base):
                 log = {
                     "avg_loss_it": loss.item(),
                     "lr_it": (
-                        self.scheduler.get_last_lr()[0]
+                        self.optimizer.param_groups[0]["lr"]
                         if self.config.scheduler
                         else self.config.lr
                     ),
@@ -311,7 +312,7 @@ class Trainer(Ddpm_base):
                 mlflow.end_run()
 
             self.logger.info(
-                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{(self.scheduler.get_last_lr()[0] if self.config.scheduler else self.config.lr):.6f}, "
+                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{(self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr):.6f}, "
                 f"saved at {os.path.join(self.config.output_dir,f'{self.config.run_name}', 'best.pt')}"
             )
 

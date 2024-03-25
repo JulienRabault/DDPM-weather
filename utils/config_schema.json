@@ -150,7 +150,10 @@
       "description": "Size of the input image"
     },
     "scheduler": {
-      "type": "boolean",
+      "type": [
+        "boolean",
+        "string"
+      ],
       "default": false,
       "description": "Use scheduler for learning rate during training"
     },
