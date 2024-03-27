@@ -38,7 +38,8 @@ class Trainer(Ddpm_base):
         self.epochs_run = 0
         self.best_loss = float("inf")
         self.guided_diffusion = self.config.guiding_col is not None
-        if self.config.scheduler is True:
+
+        if self.config.scheduler == "ReduceLROnPlateau":
             self.scheduler = ReduceLROnPlateau(
                 optimizer, mode="min", factor=0.1, patience=5, verbose=True
             )
@@ -54,6 +55,7 @@ class Trainer(Ddpm_base):
 
         else:
             self.scheduler = None
+        self._using_scheduler = self.config.scheduler is not None
 
     def _prepare_batch(self, batch, key_get, convert_keys={}):
         """
@@ -114,8 +116,7 @@ class Trainer(Ddpm_base):
             disable=not is_main_gpu(),
         )
         for i, batch in loop:
-            print("i", i)
-            print("batch", batch["img"].shape)
+
             needs_keys = ["img"] + (
                 ["condition"] if self.guided_diffusion else []
             )
@@ -123,8 +124,6 @@ class Trainer(Ddpm_base):
             loss = self._run_batch(batch_prep)
             total_loss += loss
 
-            # if self.config.scheduler:
-            #     self.scheduler.step()
             if is_main_gpu():
                 loop.set_postfix_str(f"Loss : {total_loss / (i + 1):.6f}")
 
@@ -133,7 +132,7 @@ class Trainer(Ddpm_base):
                     "avg_loss_it": loss.item(),
                     "lr_it": (
                         self.optimizer.param_groups[0]["lr"]
-                        if self.config.scheduler
+                        if self._using_scheduler
                         else self.config.lr
                     ),
                 }
@@ -142,10 +141,10 @@ class Trainer(Ddpm_base):
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
-            f"Lr : {self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr}"
+            f"Lr : {self.optimizer.param_groups[0]['lr'] if self._using_scheduler else self.config.lr}"
         )
 
-        if self.config.scheduler:
+        if self._using_scheduler:
             self.scheduler.step(total_loss / len(self.dataloader))
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
@@ -186,7 +185,7 @@ class Trainer(Ddpm_base):
                 "CROP": self.config.crop,
             },
         }
-        if self.config.scheduler:
+        if self._using_scheduler:
             snapshot["SCHEDULER_STATE"] = self.scheduler.state_dict()
         torch.save(snapshot, path)
         self.logger.info(
@@ -261,7 +260,7 @@ class Trainer(Ddpm_base):
             avg_loss = self._run_epoch(epoch)
             if is_main_gpu():
                 loop.set_postfix_str(
-                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr):.6f}"
+                    f"Epoch loss : {avg_loss:.5f} | Lr : {(self.optimizer.param_groups[0]['lr'] if self._using_scheduler else self.config.lr):.6f}"
                 )
                 if avg_loss < self.best_loss:
                     self.best_loss = avg_loss
@@ -288,7 +287,7 @@ class Trainer(Ddpm_base):
                     "avg_loss": avg_loss.item(),
                     "lr": (
                         self.optimizer.param_groups[0]["lr"]
-                        if self.config.scheduler
+                        if self._using_scheduler
                         else self.config.lr
                     ),
                 }
@@ -312,7 +311,7 @@ class Trainer(Ddpm_base):
                 mlflow.end_run()
 
             self.logger.info(
-                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{(self.optimizer.param_groups[0]['lr'] if self.config.scheduler else self.config.lr):.6f}, "
+                f"Training finished , best loss : {self.best_loss:.6f}, lr : f{(self.optimizer.param_groups[0]['lr'] if self._using_scheduler else self.config.lr):.6f}, "
                 f"saved at {os.path.join(self.config.output_dir,f'{self.config.run_name}', 'best.pt')}"
             )
 

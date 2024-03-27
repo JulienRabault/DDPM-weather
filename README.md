@@ -142,6 +142,10 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `wandbproject` : Nom du projet Wandb.
 - `use_wandb` : Utiliser Wandb pour la journalisation.
 - `entityWDB` : Nom de l'entité Wandb.
+
+- `log_by_iteration`: `false` par défaut. Si `true` : log la loss et le lr tous les steps. 
+
+
 ### Configuration du fichier de preprocessing (exemple dans configs/rr_dataset_config.yml):
 - `stat_folder` : où trouver le fichier contenant les constantes de normalisation (chemin relatif au jeu de données)
 - `stat_version`: donne un identifiant pour les fichiers de constatnes utilisés (par défaut : "rr")
@@ -160,7 +164,7 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - Partir d'un modèle pré-entraîné => le donner par `model_path`
 - Partir d'un modèle pré-entraîné ET continuer dans le même dossier d'entraînement => le donner par `model_path` ET utiliser `resume`
 
-Si vous voulez utiliser le scheduler, il faut utiliser `scheduler` et `scheduler_epoch` (par défaut : 150). Le scheduler est un scheduler de type `OneCycleLR` de PyTorch. Il est sauvegardé dans le fichier `.pt` et est utilisé pour reprendre l'entraînement, il faut donc lui donner le nombre total d'époques d'entraînement.
+Par défaut, le scheduler lr est `None` (learning rate constant). Il faut définir `scheduler: OneCycleLR` et le `scheduler_epoch` (par défaut : 150) pour utiliser le  `OneCycleLR` de PyTorch, et `scheduler: ReduceLROnPlateau`  pour utiliser le  `ReduceLROnPlateau` de PyTorch. Le scheduler est un scheduler de type `OneCycleLR` de PyTorch. Il est sauvegardé dans le fichier `.pt` et est utilisé pour reprendre l'entraînement, il faut donc lui donner le nombre total d'époques d'entraînement.
 
 ## Exemples
 
