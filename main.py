@@ -60,9 +60,7 @@ def setup_logger(config, log_file="ddpm.log", use_wandb=False):
 
     # File handler for saving log messages to a file
     file_handler = logging.FileHandler(
-        os.path.join(
-          config.output_dir, config.run_name, log_file
-        ), mode='w+'
+        os.path.join(config.output_dir, config.run_name, log_file), mode="w+"
     )
     file_handler.setLevel(logging.DEBUG if config.debug else logging.INFO)
     file_formatter = logging.Formatter(console_format)
@@ -100,7 +98,12 @@ def load_train_objs(config):
     Returns:
         tuple: model, optimizer.
     """
-    use_cond = config.guiding_col is not None and config.mode == "Train" or config.mode == "Sample" and "guided" in config.sampling_mode
+    use_cond = (
+        config.guiding_col is not None
+        and config.mode == "Train"
+        or config.mode == "Sample"
+        and "guided" in config.sampling_mode
+    )
     # Create a U-Net model and a diffusion model based on configuration
     umodel = Unet(
         dim=64,
@@ -108,7 +111,7 @@ def load_train_objs(config):
         channels=len(config.var_indexes),
         self_condition=use_cond,
     )
-    if use_cond :
+    if use_cond:
         cls = GuidedGaussianDiffusion
     else:
         cls = GaussianDiffusion
@@ -136,7 +139,9 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
     """
     # Load the dataset and create a DataLoader with distributed sampling if using multiple GPUs
     # different preprocessing strategies if we have to deal with rain rates ("rr")
-    if "rr" in config.var_indexes: #TODO :  make the "var_indexes" be "variables"
+    if (
+        "rr" in config.var_indexes
+    ):  # TODO :  make the "var_indexes" be "variables"
         train_set = dataSet_Handler.rrISDataset(config, path, csv_file)
     else:
         train_set = dataSet_Handler.ISDataset(config, path, csv_file)
@@ -144,6 +149,8 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
         train_set,
         batch_size=config.batch_size,
         pin_memory=True,
+        persistent_workers=True,
+        # non_blocking=True,
         shuffle=not torch.cuda.device_count() >= 2,
         num_workers=cpu_count() if num_workers is None else num_workers,
         sampler=(
@@ -153,7 +160,7 @@ def prepare_dataloader(config, path, csv_file, num_workers=None):
             if torch.cuda.device_count() >= 2
             else None
         ),
-        drop_last=False,
+        # drop_last=True,
     )
 
 
@@ -179,7 +186,11 @@ def main_train(config):
     else:
         invert_tf = None
     trainer = Trainer(
-        model, config, dataloader=train_data, optimizer=optimizer, inversion_transforms=invert_tf
+        model,
+        config,
+        dataloader=train_data,
+        optimizer=optimizer,
+        inversion_transforms=invert_tf,
     )
     trainer.train()
 
@@ -190,10 +201,15 @@ def main_train(config):
     # Sample the best model
     sample_data = None if config.guiding_col is None else train_data
     config.model_path = os.path.join(config.run_name, "best.pt")
-    
+
     try:
         model, _ = load_train_objs(config)
-        sampler = Sampler(model, config, dataloader=sample_data, inversion_transforms=train_data.dataset.inversion_transforms)
+        sampler = Sampler(
+            model,
+            config,
+            dataloader=sample_data,
+            inversion_transforms=train_data.dataset.inversion_transforms,
+        )
         sampler.sample(filename_format="sample_best_{i}.npy")
         logging.info(
             f"Training completed and best model sampled. You can check log and results in {config.run_name}"
@@ -214,14 +230,17 @@ def main_sample(config):
     # Load the model and start the sampling process
     model, _ = load_train_objs(config)
     sample_data = prepare_dataloader(
-            config, path=config.data_dir, csv_file=config.csv_file
-        )
+        config, path=config.data_dir, csv_file=config.csv_file
+    )
     inversion_tf = sample_data.dataset.inversion_transforms
-    data = sample_data if config.sampling_mode!="simple" else None
-    sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
+    data = sample_data if config.sampling_mode != "simple" else None
+    sampler = Sampler(
+        model, config, dataloader=data, inversion_transforms=inversion_tf
+    )
     for i in range(config.n_ensemble):
         file_format = "fake_sample_{i}_" + str(i) + ".npy"
         sampler.sample(filename_format=file_format)
+
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):
@@ -260,9 +279,7 @@ if __name__ == "__main__":
     Config.create_arguments(parser)
     default_args = parser.parse_args()
 
-    config = Config.from_args_and_yaml(
-        default_args, modified_args
-    )
+    config = Config.from_args_and_yaml(default_args, modified_args)
 
     local_rank = get_rank()
 
@@ -271,14 +288,20 @@ if __name__ == "__main__":
         os.environ["WANDB_MODE"] = "disabled"
     else:
         os.environ["WANDB_MODE"] = "offline"
-        os.environ["WANDB_CACHE_DIR"] = os.path.join(config.output_dir, config.run_name, "WANDB, cache")
-        os.environ["WANDB_DIR"] = os.path.join(config.output_dir, config.run_name, "WANDB")
+        os.environ["WANDB_CACHE_DIR"] = os.path.join(
+            config.output_dir, config.run_name, "WANDB, cache"
+        )
+        os.environ["WANDB_DIR"] = os.path.join(
+            config.output_dir, config.run_name, "WANDB"
+        )
     synchronize()
     setup_logger(config)
     logger = logging.getLogger(f"logddp_{get_rank_num()}")
 
     if is_main_gpu():
-        config.save(os.path.join(config.output_dir,config.run_name, "config.yml"))
+        config.save(
+            os.path.join(config.output_dir, config.run_name, "config.yml")
+        )
         logger.info(config)
         logger.info(f"Mode {config.mode} selected")
 
