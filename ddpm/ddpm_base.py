@@ -12,11 +12,12 @@ from utils.distributed import get_rank, is_main_gpu, get_rank_num
 
 class Ddpm_base:
     def __init__(
-            self,
-            model: torch.nn.Module,
-            config,
-            dataloader=None,
-            inversion_transforms=None) -> None:
+        self,
+        model: torch.nn.Module,
+        config,
+        dataloader=None,
+        inversion_transforms=None,
+    ) -> None:
         """
         Initialize the Trainer.
         Args:

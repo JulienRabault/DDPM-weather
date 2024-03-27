@@ -10,7 +10,13 @@ from utils.guided_loss import loss_dict
 
 
 class Sampler(Ddpm_base):
-    def __init__(self, model: torch.nn.Module, config, dataloader=None, inversion_transforms=None) -> None:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        config,
+        dataloader=None,
+        inversion_transforms=None,
+    ) -> None:
         """
         Initialize the Sampler class.
         Args:
@@ -22,7 +28,9 @@ class Sampler(Ddpm_base):
         self.loss_func = loss_dict["L1Loss"]
 
     @torch.no_grad()
-    def _simple_guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
+    def _simple_guided_sample_batch(
+        self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
+    ):
         """
         Perform guided sampling of a batch of images.
         Args:
@@ -32,19 +40,28 @@ class Sampler(Ddpm_base):
         Returns:
             numpy.ndarray: Array of sampled images.
         """
-        assert 0 <= guidance_loss_scale <= 100, "Guidance loss scale must be between 0 and 100."
+        assert (
+            0 <= guidance_loss_scale <= 100
+        ), "Guidance loss scale must be between 0 and 100."
         noise = torch.randn_like(truth_sample_batch).to(self.gpu_id)
-        t_l = torch.ones((truth_sample_batch.shape[0])).to(self.gpu_id).long() * (self.timesteps - 1)
+        t_l = torch.ones((truth_sample_batch.shape[0])).to(
+            self.gpu_id
+        ).long() * (self.timesteps - 1)
 
         if not random_noise:
-            sample = self.model.q_sample(x_start=truth_sample_batch, t=t_l, noise=noise)
+            sample = self.model.q_sample(
+                x_start=truth_sample_batch, t=t_l, noise=noise
+            )
         else:
             sample = noise
 
         for t in reversed(range(0, self.timesteps)):
             sample, _ = self.model.p_sample(sample, t, None)
             sample = sample.detach().requires_grad_()
-            loss = self.loss_func(sample, truth_sample_batch) * guidance_loss_scale
+            loss = (
+                self.loss_func(sample, truth_sample_batch)
+                * guidance_loss_scale
+            )
             # Compute the gradient of the loss and update the sample
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
@@ -62,37 +79,54 @@ class Sampler(Ddpm_base):
         """
         if is_main_gpu():
             self.logger.info(
-                f"Sampling {self.config.n_sample * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
+                f"Sampling {self.config.n_sample * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images..."
+            )
 
         i = self.gpu_id if type(self.gpu_id) is int else 0
         if self.config.sampling_mode != "simple":
             dataloader_iter = iter(self.dataloader)
         b = 0
-        with tqdm(total=self.config.n_sample // self.config.batch_size, desc="Sampling ", unit="batch",
-                  disable= not is_main_gpu()) as pbar:
+        with tqdm(
+            total=self.config.n_sample // self.config.batch_size,
+            desc="Sampling ",
+            unit="batch",
+            disable=not is_main_gpu(),
+        ) as pbar:
             while b < self.config.n_sample:
-                batch_size = min(self.config.n_sample - b, self.config.batch_size)
+                batch_size = min(
+                    self.config.n_sample - b, self.config.batch_size
+                )
                 if self.config.sampling_mode == "simple":
                     samples = super()._sample_batch(nb_img=batch_size)
                     for s in samples:
                         filename = filename_format.format(i=str(i))
-                        save_path = os.path.join(self.config.run_name, "samples", filename)
+                        save_path = os.path.join(
+                            self.config.run_name, "samples", filename
+                        )
                         np.save(save_path, s)
                         i += max(torch.cuda.device_count(), 1)
                 elif "guided" in self.config.sampling_mode:
                     batch = next(dataloader_iter)
-                    cond = batch['img'][:batch_size].to(self.gpu_id)
-                    ids = batch['img_id'][:batch_size]
+                    cond = batch["img"][:batch_size].to(self.gpu_id)
+                    ids = batch["img_id"][:batch_size]
                     if self.config.sampling_mode == "guided":
-                        samples = self._sample_batch(nb_img=batch_size, condition=cond)
+                        samples = self._sample_batch(
+                            nb_img=batch_size, condition=cond
+                        )
                     elif self.config.sampling_mode == "simple_guided":
-                        samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
+                        samples = self._simple_guided_sample_batch(
+                            cond, random_noise=self.config.random_noise
+                        )
                     for s, img_id in zip(samples, ids):
                         filename = filename_format.format(i=img_id)
-                        save_path = os.path.join(self.config.run_name, "samples", filename)
+                        save_path = os.path.join(
+                            self.config.run_name, "samples", filename
+                        )
                         np.save(save_path, s)
                 else:
-                    raise ValueError(f"Sampling mode {self.config.sampling_mode} not supported.")
+                    raise ValueError(
+                        f"Sampling mode {self.config.sampling_mode} not supported."
+                    )
                 b += batch_size
                 pbar.update(1)
 
@@ -100,4 +134,5 @@ class Sampler(Ddpm_base):
             self.plot_grid("last_samples.jpg", samples)
 
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.run_name}/samples/")
+            f"Sampling done. Images saved in {self.config.run_name}/samples/"
+        )

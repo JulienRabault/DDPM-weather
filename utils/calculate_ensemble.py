@@ -37,7 +37,9 @@ def process_data(full_path):
         # init the list of ensembles for each sample
         ensembles = [None] * len(df)
         leadtimemax = df["LeadTime"].max() + 1
-        for date in tqdm(list_dates_unique, ):  # for each unique date
+        for date in tqdm(
+            list_dates_unique,
+        ):  # for each unique date
             for j in range(leadtimemax):  # for each LeadTime between 0 and 7
                 # get idx of all samples with the same date and leadtime
                 idx = df.loc[
