@@ -47,6 +47,7 @@ def parse_arguments():
 
     parser.add_argument(
         "--n_gpu_per_task",
+        default=1,
         type=int,
         metavar="N",
         help="Number of GPUs associated with a task. Default is 1 GPU / task.",
@@ -85,7 +86,7 @@ def parse_arguments():
     parser.add_argument(
         "--cpus_per_task",
         type=int,
-        default=8,
+        default=3,
         metavar="N",
         help="Number of CPUs to associate with each task. Default is 10 for default partition or 3 for gpu_p2 partition.",
     )
@@ -116,7 +117,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args)
     command = [
-        f"python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path {config}"
+        f"-h && python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path {config}"
         for config in args.configs
     ]
 
