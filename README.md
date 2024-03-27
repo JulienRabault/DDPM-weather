@@ -253,6 +253,21 @@ et dans `/ddpm/` lance ton entrainement suivant les instructions ci dessus. Ne p
 
 Pour une réservation slurm, lancer la réservation avec `sbatch slurm/reserve_node.slurm config/config_train_jeanzay.yml`. Ne pas oublier de changer ci besoin le `slurm/.env` pour monter les bons chemin de dossiers de log, de données, de sources et de l'image singularity .sif.   
 
+Attention : en multi, incompatibilité de singularity avec `torch.distributed.run`, même en spécifiant `ntask_per_node=1`. 
+
+
+## Utilisation de la lib `idr_pytools` de l'IDRISS
+
+Le script *slurm/jobs_submitter.py* utilise la lib `idr_pytools` pour lancer des jobs (voir : http://www.idris.fr/eng/jean-zay/gpu/scripts-python-execution-travaux-gpu-eng.html)
+
+
+Voici un exemple pour lancer 8 gpu v100-32g (batch = 14): 
+`python slurm/jobs_submitter.py --config config_a100.yml --account woz@v100 --n_gpu 8 --name uncond --time_max "99:55:00" --qos qos_gpu-t4 --partition=gpu_p2`
+
+Voici un exemple pour lancer 8 gpu a100 (batch = 38) : 
+`python slurm/jobs_submitter.py --config config/config_v100.yml --account ...@a100 --n_gpu 8 --constraint a100 --cpus_per_task 8 --time_max "19:50:00" --qos qos_gpu-t3`
+
+
 ## Contact
 
 Pour toute question, vous pouvez me contacter à l'adresse suivante : `julien.rabault@irit.fr`
