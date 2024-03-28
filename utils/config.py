@@ -84,7 +84,7 @@ class Config:
                 raise ValueError(
                     "data_dir must be specified when using guided sampling mode."
                 )
-            if self.sampling_mode == "guided" and self.guiding_col is None:
+            if self.mode != 'Sample' and  self.sampling_mode == "guided" and self.guiding_col is None:
                 raise ValueError(
                     "guiding_col must be specified when using guided sampling mode."
                 )
