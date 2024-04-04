@@ -220,6 +220,8 @@ def main_sample(config):
     data = sample_data if config.sampling_mode!="simple" else None
     sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
     for i in range(config.n_ensemble):
+        if is_main_gpu():
+            logger.info(f"Sampling {i+1} of {config.n_ensemble} : file_format = fake_sample_{i}_" + str(i) + ".npy")
         file_format = "fake_sample_{i}_" + str(i) + ".npy"
         sampler.sample(filename_format=file_format)
 

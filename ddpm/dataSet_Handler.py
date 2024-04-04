@@ -43,7 +43,7 @@ class ISDataset(Dataset):
             add_coords (bool): Whether to add positional encoding.
         """
         self.data_dir = path
-        self.labels = pd.read_csv(os.path.join(path, csv_file), index_col=False)
+        self.labels = pd.read_csv( csv_file, index_col=False)
         if "Unnamed: 0" in self.labels:
                 self.labels = self.labels.drop('Unnamed: 0', axis=1)
         self.config = config
