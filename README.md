@@ -261,11 +261,11 @@ Attention : en multi, incompatibilité de singularity avec `torch.distributed.ru
 Le script *slurm/jobs_submitter.py* utilise la lib `idr_pytools` pour lancer des jobs (voir : http://www.idris.fr/eng/jean-zay/gpu/scripts-python-execution-travaux-gpu-eng.html)
 
 
-Voici un exemple pour lancer 8 gpu v100-32g (batch = 14): 
-`python slurm/jobs_submitter.py --config config_a100.yml --account woz@v100 --n_gpu 8 --name uncond --time_max "99:55:00" --qos qos_gpu-t4 --partition=gpu_p2`
+Voici un exemple pour lancer 8 gpu v100-32g (batch = 14) sur 100h : 
+`python slurm/jobs_submitter.py --config config/config_v100.yml --account ...@v100 --n_gpu 8 --name v100 --time_max "99:00:00" --qos qos_gpu-t4 --partition gpu_p2`
 
-Voici un exemple pour lancer 8 gpu a100 (batch = 38) : 
-`python slurm/jobs_submitter.py --config config/config_v100.yml --account ...@a100 --n_gpu 8 --constraint a100 --cpus_per_task 8 --time_max "19:50:00" --qos qos_gpu-t3`
+Voici un exemple pour lancer 8 gpu a100 (batch = 38)  sur 20h : 
+`python slurm/jobs_submitter.py --config config/config_v100.yml --account ...@a100 --n_gpu 8 --name a50_.001 --constraint a100 --qos qos_gpu-t3 --time_max "19:55:00"`
 
 
 ## Contact
