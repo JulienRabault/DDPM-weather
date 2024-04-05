@@ -27,7 +27,6 @@ def parse_arguments():
     parser.add_argument(
         "--module",
         type=str,
-        required=True,
         default="pytorch-gpu/py3/2.0.1",
         metavar="MODULE",
         help="Name of the module to load. Only one module name allowed.",
@@ -35,7 +34,6 @@ def parse_arguments():
     parser.add_argument(
         "--singularity",
         type=str,
-        required=True,
         metavar="SIF_IMAGE",
         help="Name of the SIF image to load. idrcontmgr command should have been applied beforehand. See documentation for Singularity container usage.",
     )
@@ -49,6 +47,7 @@ def parse_arguments():
 
     parser.add_argument(
         "--n_gpu_per_task",
+        default=1,
         type=int,
         metavar="N",
         help="Number of GPUs associated with a task. Default is 1 GPU / task.",
@@ -72,7 +71,7 @@ def parse_arguments():
     parser.add_argument(
         "--partition",
         type=str,
-        default="gpu_p13",
+        default=None,
         metavar="PARTITION",
         help="Partition to use if different from default 'gpu_p13'. Default is 'gpu_p2', 'gpu_p2l', 'gpu_p2s'.",
     )
@@ -87,7 +86,7 @@ def parse_arguments():
     parser.add_argument(
         "--cpus_per_task",
         type=int,
-        default=8,
+        default=3,
         metavar="N",
         help="Number of CPUs to associate with each task. Default is 10 for default partition or 3 for gpu_p2 partition.",
     )
@@ -118,7 +117,7 @@ if __name__ == "__main__":
     args = parse_arguments()
     print(args)
     command = [
-        f"python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path {config}"
+        f"-h && python -m torch.distributed.run --standalone --nproc_per_node gpu main.py --yaml_path {config}"
         for config in args.configs
     ]
 
@@ -131,10 +130,10 @@ if __name__ == "__main__":
         # n_gpu_per_task=args.n_gpu_per_task,
         time_max=args.time_max,
         qos=args.qos,
-        partition=args.partition,
         constraint=args.constraint,
         cpus_per_task=args.cpus_per_task,
         exclusive=args.exclusive,
         account=args.account,
         verbose=args.verbose,
+        partition=args.partition if args.partition is not None else None,
     )

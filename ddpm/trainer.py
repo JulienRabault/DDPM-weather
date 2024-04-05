@@ -101,6 +101,7 @@ class Trainer(Ddpm_base):
         Returns:
             float: Average loss for the epoch.
         """
+
         iters = len(self.dataloader)
         if dist.is_initialized():
             self.dataloader.sampler.set_epoch(epoch)
@@ -138,13 +139,19 @@ class Trainer(Ddpm_base):
                 }
                 self._log(i, log)
 
+            if self._using_scheduler and self.config.scheduler == "OneCycleLR":
+                self.scheduler.step()
+
         self.logger.debug(
             f"Epoch {epoch} | Batchsize: {self.config.batch_size} | Steps: {len(self.dataloader) * epoch} | "
             f"Last loss: {total_loss / len(self.dataloader)} | "
             f"Lr : {self.optimizer.param_groups[0]['lr'] if self._using_scheduler else self.config.lr}"
         )
 
-        if self._using_scheduler:
+        if (
+            self._using_scheduler
+            and self.config.scheduler == "ReduceLROnPlateau"
+        ):
             self.scheduler.step(total_loss / len(self.dataloader))
 
         if epoch % self.config.any_time == 0.0 and is_main_gpu():
