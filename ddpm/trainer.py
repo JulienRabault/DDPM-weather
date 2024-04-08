@@ -147,10 +147,6 @@ class Trainer(Ddpm_base):
             f"Last loss: {total_loss / len(self.dataloader)} | "
             f"Lr : {self.optimizer.param_groups[0]['lr'] if self._using_scheduler else self.config.lr}"
         )
-        
-        if self.config.scheduler:
-            self.scheduler.step(total_loss / len(self.dataloader))
-
         if (
             self._using_scheduler
             and self.config.scheduler == "ReduceLROnPlateau"
