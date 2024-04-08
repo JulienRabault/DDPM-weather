@@ -95,7 +95,8 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
         img = torch.randn(shape, device=device)
         imgs = [img]
         for time, time_next in tqdm(
-            time_pairs, desc="sampling loop time step",
+            time_pairs,
+            desc="sampling loop time step",
             leave=False,
         ):
             time_cond = torch.full(

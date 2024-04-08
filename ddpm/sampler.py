@@ -10,7 +10,13 @@ from utils.guided_loss import loss_dict
 
 
 class Sampler(Ddpm_base):
-    def __init__(self, model: torch.nn.Module, config, dataloader=None, inversion_transforms=None) -> None:
+    def __init__(
+        self,
+        model: torch.nn.Module,
+        config,
+        dataloader=None,
+        inversion_transforms=None,
+    ) -> None:
         """
         Initialize the Sampler class.
         Args:
@@ -22,7 +28,9 @@ class Sampler(Ddpm_base):
         self.loss_func = loss_dict["L1Loss"]
 
     @torch.no_grad()
-    def _simple_guided_sample_batch(self, truth_sample_batch, guidance_loss_scale=100, random_noise=False):
+    def _simple_guided_sample_batch(
+        self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
+    ):
         """
         Perform guided sampling of a batch of images.
         Args:
@@ -32,19 +40,28 @@ class Sampler(Ddpm_base):
         Returns:
             numpy.ndarray: Array of sampled images.
         """
-        assert 0 <= guidance_loss_scale <= 100, "Guidance loss scale must be between 0 and 100."
+        assert (
+            0 <= guidance_loss_scale <= 100
+        ), "Guidance loss scale must be between 0 and 100."
         noise = torch.randn_like(truth_sample_batch).to(self.gpu_id)
-        t_l = torch.ones((truth_sample_batch.shape[0])).to(self.gpu_id).long() * (self.timesteps - 1)
+        t_l = torch.ones((truth_sample_batch.shape[0])).to(
+            self.gpu_id
+        ).long() * (self.timesteps - 1)
 
         if not random_noise:
-            sample = self.model.q_sample(x_start=truth_sample_batch, t=t_l, noise=noise)
+            sample = self.model.q_sample(
+                x_start=truth_sample_batch, t=t_l, noise=noise
+            )
         else:
             sample = noise
 
         for t in reversed(range(0, self.timesteps)):
             sample, _ = self.model.p_sample(sample, t, None)
             sample = sample.detach().requires_grad_()
-            loss = self.loss_func(sample, truth_sample_batch) * guidance_loss_scale
+            loss = (
+                self.loss_func(sample, truth_sample_batch)
+                * guidance_loss_scale
+            )
             # Compute the gradient of the loss and update the sample
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
