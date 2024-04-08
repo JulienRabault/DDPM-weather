@@ -104,4 +104,4 @@ class Sampler(Ddpm_base):
             self.plot_grid("last_samples.jpg", samples)
 
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.run_name}/samples/")
+            f"Sampling done. Images saved in {self.config.output_dir}/{self.config.run_name}/samples/")
