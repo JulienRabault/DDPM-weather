@@ -53,9 +53,7 @@ class ISDataset(Dataset):
             add_coords (bool): Whether to add positional encoding.
         """
         self.data_dir = path
-        self.labels = pd.read_csv(
-            os.path.join(path, csv_file), index_col=False
-        )
+        self.labels = pd.read_csv( csv_file, index_col=False)
         if "Unnamed: 0" in self.labels:
             self.labels = self.labels.drop("Unnamed: 0", axis=1)
         self.config = config
@@ -152,11 +150,11 @@ class ISDataset(Dataset):
         # Get conditional sample if ensembles are specified
         if self.ensembles is not None:
             ensemble_id = self.labels.loc[idx, self.config.guiding_col]
-            # TODO : a opti
-            group = self.labels[self.labels["ensemble_id"] == ensemble_id]
-            group_ensemble = group[group["Name"] != self.labels.iloc[idx, 0]]
+            #TODO : a opti
+            group = self.labels[self.labels['ensemble_id'] == ensemble_id]
+            group_ensemble = group[group['Name'] != self.labels.iloc[idx, 0]]
             row = group_ensemble.sample(n=1)
-            ens = row["Name"].values[0]
+            ens = row['Name'].values[0]
             condition = self.file_to_torch(ens)
         else:
             condition = torch.empty(0)

@@ -166,7 +166,7 @@ class Ddpm_base:
                     fig.colorbar(im, ax=axes[i])
         # Save the plot to the specified file path
         plt.savefig(
-            os.path.join(f"{self.config.run_name}", "samples", file_name),
+            os.path.join(f"{self.config.output_dir}" , f"{self.config.run_name}", "samples", file_name),
             bbox_inches="tight",
         )
         plt.close()
