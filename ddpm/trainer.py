@@ -216,7 +216,7 @@ class Trainer(Ddpm_base):
         wandb.init(
             project=self.config.wandbproject,
             resume="auto" if self.config.resume else None,
-            mode="offline",
+            mode=os.environ["WANDB_MODE"],
             entity=self.config.entityWDB,
             name=f"{self.config.run_name}_{t}/",
             config={
