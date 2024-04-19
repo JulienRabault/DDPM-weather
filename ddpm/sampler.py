@@ -37,7 +37,20 @@ class Sampler(Ddpm_base):
             model.model.random_or_learned_sinusoidal_cond = True
 
             self.karras_sampler = ElucidatedDiffusion(
-                model.model, image_size=256, channels=3
+                model.model,
+                image_size=256,
+                channels=3,
+                num_sample_steps=32,  # number of sampling steps
+                sigma_min=0.002,  # min noise level
+                sigma_max=80,  # max noise level
+                sigma_data=0.5,  # standard deviation of data distribution
+                rho=7,  # controls the sampling schedule
+                P_mean=-1.2,  # mean of log-normal distribution from which noise is drawn for training
+                P_std=1.2,  # standard deviation of log-normal distribution from which noise is drawn for training
+                S_churn=0,  # parameters for stochastic sampling - depends on dataset, Table 5 in apper
+                S_tmin=0.05,
+                S_tmax=50,
+                S_noise=1.003,
             )
         else:
             self.karras = False
