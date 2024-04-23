@@ -29,7 +29,7 @@ class Ddpm_base:
         self.scheduler = None
         self.config = config
         self.gpu_id = get_rank()
-        self.timesteps = model.num_timesteps
+        # self.timesteps = model.num_timesteps
         self.dataloader = dataloader
         self.snapshot_path = self.config.model_path
         self.model = model
@@ -166,7 +166,12 @@ class Ddpm_base:
                     fig.colorbar(im, ax=axes[i])
         # Save the plot to the specified file path
         plt.savefig(
-            os.path.join(f"{self.config.output_dir}" , f"{self.config.run_name}", "samples", file_name),
+            os.path.join(
+                f"{self.config.output_dir}",
+                f"{self.config.run_name}",
+                "samples",
+                file_name,
+            ),
             bbox_inches="tight",
         )
         plt.close()

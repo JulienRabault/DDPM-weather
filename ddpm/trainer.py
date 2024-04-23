@@ -87,7 +87,7 @@ class Trainer(Ddpm_base):
             float: Loss value for the batch.
         """
         self.optimizer.zero_grad()
-        loss = self.model(**batch)
+        loss = self.model(batch["img"])
         loss.backward()
         self.optimizer.step()
         loss = loss.detach().cpu()
@@ -182,7 +182,7 @@ class Trainer(Ddpm_base):
             "EPOCHS_RUN": epoch,
             "OPTIMIZER_STATE": self.optimizer.state_dict(),
             "BEST_LOSS": loss,
-            "TIMESTAMP": self.timesteps,
+            # "TIMESTAMP": self.timesteps,
             "GUIDED_DIFFUSION": self.guided_diffusion,
             "DATA": {
                 # "STDS": self.stds,
