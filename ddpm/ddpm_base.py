@@ -39,6 +39,7 @@ class Ddpm_base:
         if self.snapshot_path is not None:
             if is_main_gpu():
                 self.logger.info(f"Loading snapshot")
+
             self._load_snapshot(self.snapshot_path)
 
         # Move model to GPU
@@ -166,7 +167,12 @@ class Ddpm_base:
                     fig.colorbar(im, ax=axes[i])
         # Save the plot to the specified file path
         plt.savefig(
-            os.path.join(f"{self.config.output_dir}" , f"{self.config.run_name}", "samples", file_name),
+            os.path.join(
+                f"{self.config.output_dir}",
+                f"{self.config.run_name}",
+                "samples",
+                file_name,
+            ),
             bbox_inches="tight",
         )
         plt.close()

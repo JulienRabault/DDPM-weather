@@ -7,9 +7,12 @@ import logging
 from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
-from denoising_diffusion_pytorch.elucidated_diffusion import (
+
+from ddpm.elucidated_sampler import (
     ElucidatedDiffusion,
 )
+
+# from denoising_diffusion_pytorch import ElucidatedDiffusion
 
 
 class Sampler(Ddpm_base):
@@ -34,20 +37,20 @@ class Sampler(Ddpm_base):
             self.config.sampling_mode = "simple"
             self.karras = True
 
-            model.model.random_or_learned_sinusoidal_cond = True
+            # model.random_or_learned_sinusoidal_cond = True
 
             self.karras_sampler = ElucidatedDiffusion(
-                model.model,
+                model,
                 image_size=256,
                 channels=3,
                 num_sample_steps=32,  # number of sampling steps
-                sigma_min=0.002,  # min noise level
-                sigma_max=80,  # max noise level
+                sigma_min=1,  # min noise level
+                sigma_max=999,  # max noise level
                 sigma_data=0.5,  # standard deviation of data distribution
                 rho=7,  # controls the sampling schedule
                 P_mean=-1.2,  # mean of log-normal distribution from which noise is drawn for training
                 P_std=1.2,  # standard deviation of log-normal distribution from which noise is drawn for training
-                S_churn=0,  # parameters for stochastic sampling - depends on dataset, Table 5 in apper
+                # S_churn=0,  # parameters for stochastic sampling - depends on dataset, Table 5 in apper
                 S_tmin=0.05,
                 S_tmax=50,
                 S_noise=1.003,

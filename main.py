@@ -233,13 +233,20 @@ def main_sample(config):
         config, path=config.data_dir, csv_file=config.csv_file
     )
     inversion_tf = sample_data.dataset.inversion_transforms
-    data = sample_data if config.sampling_mode!="simple" else None
-    sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
+    data = sample_data if config.sampling_mode != "simple" else None
+    sampler = Sampler(
+        model, config, dataloader=data, inversion_transforms=inversion_tf
+    )
     for i in range(config.n_ensemble):
         if is_main_gpu():
-            logger.info(f"Sampling {i+1} of {config.n_ensemble} : file_format = fake_sample_{i}_" + str(i) + ".npy")
+            logger.info(
+                f"Sampling {i+1} of {config.n_ensemble} : file_format = fake_sample_{i}_"
+                + str(i)
+                + ".npy"
+            )
         file_format = "fake_sample_{i}_" + str(i) + ".npy"
         sampler.sample(filename_format=file_format)
+
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):
