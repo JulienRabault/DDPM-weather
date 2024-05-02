@@ -49,8 +49,8 @@ class ElucidatedDiffusion(nn.Module):
         image_size,
         channels=3,
         num_sample_steps=32,  # number of sampling steps
-        sigma_min=0.002,  # min noise level
-        sigma_max=80,  # max noise level
+        sigma_min=0.01,  # min noise level
+        sigma_max=0.141,  # max noise level
         sigma_data=0.5,  # standard deviation of data distribution
         rho=7,  # controls the sampling schedule
         P_mean=-1.2,  # mean of log-normal distribution from which noise is drawn for training
@@ -58,13 +58,13 @@ class ElucidatedDiffusion(nn.Module):
         S_churn=80,  # parameters for stochastic sampling - depends on dataset, Table 5 in apper
         S_tmin=0.05,
         S_tmax=50,
-        S_noise=1.003,
+        S_noise=0.0,
     ):
         super().__init__()
 
         # assert net.random_or_learned_sinusoidal_cond
         self.self_condition = net.self_condition
-
+        print(f"self condition {self.self_condition}")
         self.net = net
 
         # image dimensions
@@ -193,7 +193,7 @@ class ElucidatedDiffusion(nn.Module):
         return sigmas
 
     @torch.no_grad()
-    def sample(self, batch_size=16, num_sample_steps=None, clamp=True):
+    def sample(self, batch_size=16, num_sample_steps=None, cond=None, clamp=False):
 
         num_sample_steps = default(num_sample_steps, self.num_sample_steps)
 
@@ -243,7 +243,7 @@ class ElucidatedDiffusion(nn.Module):
 
             images_hat = images + sqrt(sigma_hat**2 - sigma**2) * eps
 
-            self_cond = x_start if self.self_condition else None
+            self_cond = x_start if self.self_condition else cond
 
             model_output = self.preconditioned_network_forward(
                 images_hat, sigma_hat, self_cond, clamp=clamp

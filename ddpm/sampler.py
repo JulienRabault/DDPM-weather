@@ -33,8 +33,8 @@ class Sampler(Ddpm_base):
         super().__init__(model, config, dataloader, inversion_transforms)
         self.loss_func = loss_dict["L1Loss"]
 
-        if self.config.sampling_mode == "karras":
-            self.config.sampling_mode = "simple"
+        if "karras" in self.config.sampling_mode:
+            self.config.sampling_mode = "simple" if "guided" not in self.config.sampling_mode
             self.karras = True
 
             # model.random_or_learned_sinusoidal_cond = True
@@ -97,6 +97,26 @@ class Sampler(Ddpm_base):
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
+        return sampled_images_unnorm
+
+    @torch.no_grad()
+    def _karras_guided_sample_batch(
+        self, truth_sample_batch
+    ):
+        """
+        Perform guided sampling of a batch of images.
+        Args:
+            truth_sample_batch (torch.Tensor): Ground truth image batch for guidance.
+            guidance_loss_scale (float): Scaling factor for the guidance loss between [0 - 100].
+            random_noise (bool): Whether to use random noise as the initial sample.
+        Returns:
+            numpy.ndarray: Array of sampled images.
+        """
+        
+        batch_size = truth_sample_batch.shape[0]
+        samples = self.karras_sampler.sample(batch_size,cond=truth_sample_batch)
+
+        sampled_images_unnorm = self.transforms_func(samples).cpu().numpy()
         return sampled_images_unnorm
 
     @torch.no_grad()
@@ -168,6 +188,10 @@ class Sampler(Ddpm_base):
                     )
                 elif self.config.sampling_mode == "simple_guided":
                     samples = self._simple_guided_sample_batch(
+                        cond, random_noise=self.config.random_noise
+                    )
+                elif self.karras:
+                    samples = self._karras_guided_sample_batch(
                         cond, random_noise=self.config.random_noise
                     )
                 for s, img_id in zip(samples, ids):
