@@ -51,7 +51,8 @@
         "simple",
         "guided",
         "simple_guided",
-        "karras"
+        "karras",
+        "guided_karras"
       ],
       "default": "simple",
       "description": "Sampling mode: Choose between simple, guided, or simple_guided"

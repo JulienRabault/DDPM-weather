@@ -309,7 +309,7 @@ if __name__ == "__main__":
     logger.debug(f"Local_rank: {local_rank}")
 
     # Execute the main training or sampling function based on the mode
-    main_train(config)
+    main_sample(config)
 
     # Clean up distributed processes if initialized
     if dist.is_initialized():

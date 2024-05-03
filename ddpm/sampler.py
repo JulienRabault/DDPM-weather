@@ -34,7 +34,7 @@ class Sampler(Ddpm_base):
         self.loss_func = loss_dict["L1Loss"]
 
         if "karras" in self.config.sampling_mode:
-            self.config.sampling_mode = "simple" if "guided" not in self.config.sampling_mode
+            self.config.sampling_mode = "simple" if "guided" not in self.config.sampling_mode else self.config.sampling_mode
             self.karras = True
 
             # model.random_or_learned_sinusoidal_cond = True
@@ -43,8 +43,8 @@ class Sampler(Ddpm_base):
                 model,
                 image_size=256,
                 channels=3,
-                num_sample_steps=32,  # number of sampling steps
-                sigma_min=0.01,  # min noise level
+                num_sample_steps=100,  # number of sampling steps
+                sigma_min=0.0001,  # min noise level
                 sigma_max=0.141,  # max noise level
                 sigma_data=0.5,  # standard deviation of data distribution
                 rho=7,  # controls the sampling schedule
@@ -182,6 +182,7 @@ class Sampler(Ddpm_base):
             ):
                 cond = batch["img"].to(self.gpu_id)
                 ids = batch["img_id"]
+                print(f"cond stats : mean {cond.mean().item()} max {cond.max().item()}")
                 if self.config.sampling_mode == "guided":
                     samples = self._sample_batch(
                         nb_img=len(cond), condition=cond
@@ -192,7 +193,7 @@ class Sampler(Ddpm_base):
                     )
                 elif self.karras:
                     samples = self._karras_guided_sample_batch(
-                        cond, random_noise=self.config.random_noise
+                        cond
                     )
                 for s, img_id in zip(samples, ids):
                     filename = filename_format.format(i=img_id)
@@ -210,7 +211,7 @@ class Sampler(Ddpm_base):
             )
 
         if self.config.plot and is_main_gpu():
-            self.plot_grid("last_samples.jpg", samples)
+            self.plot_grid("last_samples.jpg", samples[:1,:1])
 
         self.logger.info(
             f"Sampling done. Images saved in {self.config.output_dir}/{self.config.run_name}/samples/"
