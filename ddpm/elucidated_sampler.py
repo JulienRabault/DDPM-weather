@@ -105,7 +105,6 @@ class ElucidatedDiffusion(nn.Module):
             return 1.0
 
     def c_out(self, sigma, option="edm"):
-
         if option == "edm":
             return (
                 sigma
@@ -119,7 +118,7 @@ class ElucidatedDiffusion(nn.Module):
         if option == "edm":
             return 1 * (sigma**2 + self.sigma_data**2) ** -0.5
         elif option == "ddim":
-            return 1 * (sigma**2 + 1.0) ** -0.5
+            return 1 * (sigma**2 + 1.0) ** -0.5  #  1/√(σ²+1.0)
 
     def c_noise(self, sigma, option="edm", max_steps=None):
         if option == "edm":
@@ -148,23 +147,20 @@ class ElucidatedDiffusion(nn.Module):
 
         padded_sigma = rearrange(sigma, "b -> b 1 1 1")
 
-        c_in = self.c_in(padded_sigma, option="ddim").squeeze()
+        # c_in = self.c_in(padded_sigma, option="ddim").squeeze()
+        # if len(c_in.shape) > 0:
+        #     c_in = c_in[0]
+        # c_noise = self.c_noise(sigma, option="ddim", max_steps=1000).squeeze()
+        # if len(c_noise.shape) > 0:
+        #     c_noise = c_noise[0]
 
-        if len(c_in.shape) > 0:
-            c_in = c_in[0]
-
-        c_noise = self.c_noise(sigma, option="ddim", max_steps=1000).squeeze()
-        if len(c_noise.shape) > 0:
-            c_noise = c_noise[0]
-
-        c_skip = self.c_skip(padded_sigma, option="ddim")
-
-        c_out = self.c_out(padded_sigma, option="ddim").squeeze()
-        if len(c_out.shape) > 0:
-            c_out = c_out[0]
+        # c_skip = self.c_skip(padded_sigma, option="ddim")
+        # c_out = self.c_out(padded_sigma, option="ddim").squeeze()
+        # if len(c_out.shape) > 0:
+        #     c_out = c_out[0]
 
         v = self.net.model(
-            self.c_in(padded_sigma, option="ddim") * noised_images,
+            noised_images,
             self.c_noise(sigma, option="ddim", max_steps=1000).int(),
             self_cond,
         )
@@ -174,13 +170,6 @@ class ElucidatedDiffusion(nn.Module):
             self.c_noise(sigma, option="ddim", max_steps=1000).long(),
             v,
         )
-
-        # print(x_start[0,0,0,0])
-        # print("compute noise")
-        # noise = self.net.predict_noise_from_start(noised_images,self.c_noise(sigma,option="ddim",max_steps=1000).long(),x_start)
-        # print(noise[0,0,0,0])
-        # print("compute out")
-        # print(sigma)
 
         return x_start
 

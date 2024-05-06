@@ -47,7 +47,7 @@ class Sampler(Ddpm_base):
                 model,
                 image_size=256,
                 channels=3,
-                num_sample_steps=100,  # number of sampling steps
+                num_sample_steps=10,  # number of sampling steps
                 sigma_min=0.0001,  # min noise level
                 sigma_max=0.141,  # max noise level
                 sigma_data=0.5,  # standard deviation of data distribution
