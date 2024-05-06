@@ -64,7 +64,7 @@ class ElucidatedDiffusion(nn.Module):
 
         # assert net.random_or_learned_sinusoidal_cond
         self.self_condition = net.self_condition
-        print(f"self condition {self.self_condition}")
+        # print(f"self condition {self.self_condition}")
         self.net = net
 
         # image dimensions
@@ -99,35 +99,39 @@ class ElucidatedDiffusion(nn.Module):
     # derived preconditioning params - Table 1
 
     def c_skip(self, sigma, option="edm"):
-        if option=="edm":
+        if option == "edm":
             return (self.sigma_data**2) / (sigma**2 + self.sigma_data**2)
-        elif option=="ddim":
+        elif option == "ddim":
             return 1.0
 
     def c_out(self, sigma, option="edm"):
 
-        if option=="edm":
+        if option == "edm":
             return (
-                sigma * self.sigma_data * (self.sigma_data**2 + sigma**2) ** -0.5
+                sigma
+                * self.sigma_data
+                * (self.sigma_data**2 + sigma**2) ** -0.5
             )
-        elif option=="ddim":
+        elif option == "ddim":
             return -1 * sigma
 
     def c_in(self, sigma, option="edm"):
-        if option=="edm":
+        if option == "edm":
             return 1 * (sigma**2 + self.sigma_data**2) ** -0.5
-        elif option=="ddim":
+        elif option == "ddim":
             return 1 * (sigma**2 + 1.0) ** -0.5
 
-    def c_noise(self, sigma, option="edm",max_steps=None):
-        if option=="edm":
+    def c_noise(self, sigma, option="edm", max_steps=None):
+        if option == "edm":
             return log(sigma) * 0.25
-        elif option=="ddim":
+        elif option == "ddim":
             # here the aim is to retrieve the "t" index corresponding to sigma in the training
             # if we assume linear schedule for beta_t and sigma_t**2 = beta_t
-            return float(max_steps - 1) * (sigma ** 2 - self.sigma_min ** 2) / (self.sigma_max ** 2 - self.sigma_min ** 2)
-
-
+            return (
+                float(max_steps - 1)
+                * (sigma**2 - self.sigma_min**2)
+                / (self.sigma_max**2 - self.sigma_min**2)
+            )
 
     # preconditioned network output
     # equation (7) in the paper
@@ -143,28 +147,41 @@ class ElucidatedDiffusion(nn.Module):
             )
 
         padded_sigma = rearrange(sigma, "b -> b 1 1 1")
-        c_in = self.c_in(padded_sigma,option="ddim").squeeze()[0]
-        c_noise = self.c_noise(sigma,option="ddim",max_steps=1000).squeeze()[0]
-        c_skip = self.c_skip(padded_sigma,option="ddim")
-        c_out = self.c_out(padded_sigma,option="ddim").squeeze()[0]
-        print("c_noise", c_noise)
+
+        c_in = self.c_in(padded_sigma, option="ddim").squeeze()
+
+        if len(c_in.shape) > 0:
+            c_in = c_in[0]
+
+        c_noise = self.c_noise(sigma, option="ddim", max_steps=1000).squeeze()
+        if len(c_noise.shape) > 0:
+            c_noise = c_noise[0]
+
+        c_skip = self.c_skip(padded_sigma, option="ddim")
+
+        c_out = self.c_out(padded_sigma, option="ddim").squeeze()
+        if len(c_out.shape) > 0:
+            c_out = c_out[0]
+
         v = self.net.model(
-            self.c_in(padded_sigma,option="ddim") * noised_images,
-            self.c_noise(sigma,option="ddim",max_steps=1000).int(),
+            self.c_in(padded_sigma, option="ddim") * noised_images,
+            self.c_noise(sigma, option="ddim", max_steps=1000).int(),
             self_cond,
         )
-        print("compute x_start")
-        print(self.net.sqrt_alphas_cumprod.shape)
 
-        x_start = self.net.predict_start_from_v(noised_images,self.c_noise(sigma,option="ddim",max_steps=1000).long(),v)
-        
-        #print(x_start[0,0,0,0])
-        #print("compute noise")
-        #noise = self.net.predict_noise_from_start(noised_images,self.c_noise(sigma,option="ddim",max_steps=1000).long(),x_start)
-        #print(noise[0,0,0,0])
-        #print("compute out")
-        #print(sigma)
-        
+        x_start = self.net.predict_start_from_v(
+            noised_images,
+            self.c_noise(sigma, option="ddim", max_steps=1000).long(),
+            v,
+        )
+
+        # print(x_start[0,0,0,0])
+        # print("compute noise")
+        # noise = self.net.predict_noise_from_start(noised_images,self.c_noise(sigma,option="ddim",max_steps=1000).long(),x_start)
+        # print(noise[0,0,0,0])
+        # print("compute out")
+        # print(sigma)
+
         return x_start
 
     # sampling
@@ -195,7 +212,9 @@ class ElucidatedDiffusion(nn.Module):
         return sigmas
 
     @torch.no_grad()
-    def sample(self, batch_size=16, num_sample_steps=None, cond=None, clamp=False):
+    def sample(
+        self, batch_size=16, num_sample_steps=None, cond=None, clamp=False
+    ):
 
         num_sample_steps = default(num_sample_steps, self.num_sample_steps)
 
@@ -219,10 +238,6 @@ class ElucidatedDiffusion(nn.Module):
         # images = init_sigma * torch.randn(shape, device=self.device)
         images = init_sigma * torch.randn(shape, device=self.device)
 
-        print(
-            f"init mean : {torch.mean(images).item()}, max : {torch.max(images).item()}"
-        )
-
         # for self conditioning
 
         x_start = None
@@ -239,26 +254,19 @@ class ElucidatedDiffusion(nn.Module):
                 shape, device=self.device
             )  # stochastic sampling
 
-            sigma_hat = sigma #+ gamma * sigma
-            images_hat = images # + sqrt(sigma_hat**2 - sigma**2) * eps
+            sigma_hat = sigma  # + gamma * sigma
+            images_hat = images  # + sqrt(sigma_hat**2 - sigma**2) * eps
             self_cond = cond if self.self_condition else None
 
             model_output = self.preconditioned_network_forward(
                 images_hat, sigma_hat, self_cond, clamp=clamp
             )
 
-            print(
-                f"mean : {torch.mean(model_output).item()}, max : {torch.max(model_output).item()}"
-            )
-
             denoised_over_sigma = (images_hat - model_output) / sigma_hat
-            print(
-                f" denoising magnitude mean : {torch.mean(denoised_over_sigma).item()}, max : {torch.max(denoised_over_sigma).item()}, std : {torch.std(denoised_over_sigma).item()}"
-            )
+
             images_next = (
                 images_hat + (sigma_next - sigma_hat) * denoised_over_sigma
             )
-            print("img diff std",(images_next - images_hat).std())
 
             # second order correction, if not the last timestep
 
@@ -281,7 +289,7 @@ class ElucidatedDiffusion(nn.Module):
         # images = images.clamp(-1.0, 1.0)
         # images = unnormalize_to_zero_to_one(images)
 
-        #images = self.net.unnormalize(images)
+        # images = self.net.unnormalize(images)
         return images
 
     @torch.no_grad()
@@ -382,7 +390,5 @@ class ElucidatedDiffusion(nn.Module):
         losses = reduce(losses, "b ... -> b", "mean")
 
         losses = losses * self.loss_weight(sigmas)
-
-        print("forward")
 
         return losses.mean()

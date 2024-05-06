@@ -34,7 +34,11 @@ class Sampler(Ddpm_base):
         self.loss_func = loss_dict["L1Loss"]
 
         if "karras" in self.config.sampling_mode:
-            self.config.sampling_mode = "simple" if "guided" not in self.config.sampling_mode else self.config.sampling_mode
+            self.config.sampling_mode = (
+                "simple"
+                if "guided" not in self.config.sampling_mode
+                else self.config.sampling_mode
+            )
             self.karras = True
 
             # model.random_or_learned_sinusoidal_cond = True
@@ -100,9 +104,7 @@ class Sampler(Ddpm_base):
         return sampled_images_unnorm
 
     @torch.no_grad()
-    def _karras_guided_sample_batch(
-        self, truth_sample_batch
-    ):
+    def _karras_guided_sample_batch(self, truth_sample_batch):
         """
         Perform guided sampling of a batch of images.
         Args:
@@ -112,9 +114,11 @@ class Sampler(Ddpm_base):
         Returns:
             numpy.ndarray: Array of sampled images.
         """
-        
+
         batch_size = truth_sample_batch.shape[0]
-        samples = self.karras_sampler.sample(batch_size,cond=truth_sample_batch)
+        samples = self.karras_sampler.sample(
+            batch_size, cond=truth_sample_batch
+        )
 
         sampled_images_unnorm = self.transforms_func(samples).cpu().numpy()
         return sampled_images_unnorm
@@ -182,7 +186,7 @@ class Sampler(Ddpm_base):
             ):
                 cond = batch["img"].to(self.gpu_id)
                 ids = batch["img_id"]
-                print(f"cond stats : mean {cond.mean().item()} max {cond.max().item()}")
+                # print(f"cond stats : mean {cond.mean().item()} max {cond.max().item()}")
                 if self.config.sampling_mode == "guided":
                     samples = self._sample_batch(
                         nb_img=len(cond), condition=cond
@@ -192,9 +196,7 @@ class Sampler(Ddpm_base):
                         cond, random_noise=self.config.random_noise
                     )
                 elif self.karras:
-                    samples = self._karras_guided_sample_batch(
-                        cond
-                    )
+                    samples = self._karras_guided_sample_batch(cond)
                 for s, img_id in zip(samples, ids):
                     filename = filename_format.format(i=img_id)
                     save_path = os.path.join(
@@ -211,7 +213,7 @@ class Sampler(Ddpm_base):
             )
 
         if self.config.plot and is_main_gpu():
-            self.plot_grid("last_samples.jpg", samples[:1,:1])
+            self.plot_grid("last_samples.jpg", samples[:1, :1])
 
         self.logger.info(
             f"Sampling done. Images saved in {self.config.output_dir}/{self.config.run_name}/samples/"
