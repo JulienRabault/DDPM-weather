@@ -123,11 +123,7 @@ def load_train_objs(config):
     )
 
     if use_cond:
-        if config.sampling_mode == "guided":
-            cls = GuidedGaussianDiffusion
-        else:
-            cls = GuidedGaussianDiffusion(with_grad=True)
-
+        cls = GuidedGaussianDiffusion
     else:
         cls = GaussianDiffusion
 
@@ -139,6 +135,10 @@ def load_train_objs(config):
         auto_normalize=config.auto_normalize,
         sampling_timesteps=config.ddim_timesteps,
     )
+
+    if config.sampling_mode == "simple_guided":
+        model.enable_grad()
+
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.lr, betas=config.adam_betas
     )

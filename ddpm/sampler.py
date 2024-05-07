@@ -27,7 +27,7 @@ class Sampler(Ddpm_base):
         super().__init__(model, config, dataloader, inversion_transforms)
         self.loss_func = loss_dict["L1Loss"]
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def _simple_guided_sample_batch(
         self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
     ):
