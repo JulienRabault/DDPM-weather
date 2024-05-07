@@ -10,15 +10,16 @@ from tqdm import tqdm
 
 
 class GuidedGaussianDiffusion(GaussianDiffusion):
-    def __init__(self, with_grad=False, *args, **kwargs):
+    def __init__(self, *args, with_grad=False, **kwargs):
         """
         Initialize the GuidedGaussianDiffusion.
         Args:
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
         """
-        self.with_grad = with_grad
         super().__init__(*args, **kwargs)
+
+        self.with_grad = with_grad
 
     @torch.no_grad()
     def sample(self, batch_size, return_all_timesteps=False, condition=None):
