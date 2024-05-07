@@ -115,10 +115,18 @@ def load_train_objs(config):
         self_condition=use_cond,
     )
 
+    use_cond = (
+        config.guiding_col is not None
+        and config.mode == "Train"
+        or config.mode == "Sample"
+        and "guided" in config.sampling_mode
+    )
+
     if use_cond:
         cls = GuidedGaussianDiffusion
     else:
         cls = GaussianDiffusion
+
     model = cls(
         umodel,
         image_size=config.image_size,
