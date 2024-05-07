@@ -17,7 +17,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
         """
-        super().__init__(*args, **kwargs)
+        super(GuidedGaussianDiffusion, self).__init__(*args, **kwargs)
 
         self.with_grad = with_grad
 
