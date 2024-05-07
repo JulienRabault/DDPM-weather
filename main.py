@@ -123,7 +123,11 @@ def load_train_objs(config):
     )
 
     if use_cond:
-        cls = GuidedGaussianDiffusion
+        if config.sampling_mode == "guided":
+            cls = GuidedGaussianDiffusion
+        else:
+            cls = GuidedGaussianDiffusion(with_grad=True)
+
     else:
         cls = GaussianDiffusion
 
