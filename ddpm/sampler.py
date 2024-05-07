@@ -9,6 +9,20 @@ from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
 
 
+def l1_loss(prediction, target):
+    """
+    Compute L1 loss between prediction and target tensors.
+
+    Args:
+        prediction (torch.Tensor): The prediction tensor.
+        target (torch.Tensor): The target tensor.
+
+    Returns:
+        torch.Tensor: The L1 loss.
+    """
+    return torch.mean(torch.abs(prediction - target))
+
+
 class Sampler(Ddpm_base):
     def __init__(
         self,
@@ -25,7 +39,8 @@ class Sampler(Ddpm_base):
             dataloader: The data loader for input data (optional).
         """
         super().__init__(model, config, dataloader, inversion_transforms)
-        self.loss_func = loss_dict["L1Loss"]
+        # self.loss_func = loss_dict["L1Loss"]
+        self.loss_func = l1_loss
 
     # @torch.no_grad()
     def _simple_guided_sample_batch(
@@ -63,6 +78,9 @@ class Sampler(Ddpm_base):
                 * guidance_loss_scale
             )
             # Compute the gradient of the loss and update the sample
+            print("loss", loss)
+            print("sample", sample)
+
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
