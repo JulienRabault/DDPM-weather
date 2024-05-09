@@ -207,7 +207,7 @@
     },
     "guidance_loss_scale": {
       "type": "integer",
-      "default": 0,
+      "default": 50,
       "description": "Scale factor for guidance loss in guided sampling"
     },
     "beta_schedule": {

@@ -1,3 +1,4 @@
+from sympy import false
 import torch
 from denoising_diffusion_pytorch import GaussianDiffusion
 from denoising_diffusion_pytorch.denoising_diffusion_pytorch import (
@@ -17,9 +18,14 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
         """
-        super().__init__(*args, **kwargs)
+        super(GuidedGaussianDiffusion, self).__init__(*args, **kwargs)
 
-    @torch.no_grad()
+        self.with_grad = False
+
+    def enable_grad(self):
+        self.with_grad = True
+
+    # @torch.no_grad()
     def sample(self, batch_size, return_all_timesteps=False, condition=None):
         """
         Generate samples using guided diffusion.
@@ -42,7 +48,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             condition=condition,
         )
 
-    @torch.no_grad()
+    # @torch.no_grad()
     def p_sample_loop(self, shape, return_all_timesteps=False, condition=None):
         """
         Sample from guided diffusion using a loop over timesteps.
@@ -62,13 +68,45 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             total=self.num_timesteps,
             leave=False,
         ):
-            img, x_start = self.p_sample(img, t, condition)
+            if self.with_grad:
+                img, x_start = self.p_sample(img, t, condition)
+            else:
+                with torch.inference_mode():
+                    img, x_start = self.p_sample(img, t, condition)
+
             imgs.append(img)
         ret = img if not return_all_timesteps else torch.stack(imgs, dim=1)
         ret = self.unnormalize(ret)
         return ret
 
-    @torch.no_grad()
+    def p_sample(self, x, t: int, x_self_cond=None):
+        b, *_, device = *x.shape, self.device
+        batched_times = torch.full((b,), t, device=device, dtype=torch.long)
+        model_mean, _, model_log_variance, x_start = self.p_mean_variance(
+            x=x, t=batched_times, x_self_cond=x_self_cond, clip_denoised=True
+        )
+        noise = torch.randn_like(x) if t > 0 else 0.0  # no noise if t == 0
+        pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
+        return pred_img, x_start
+
+    def p_mean_variance(self, x, t, x_self_cond=None, clip_denoised=True):
+        if self.with_grad:
+            preds = self.model_predictions(x, t, x_self_cond)
+        else:
+            with torch.inference_mode():
+                preds = self.model_predictions(x, t, x_self_cond)
+
+        x_start = preds.pred_x_start
+
+        if clip_denoised:
+            x_start.clamp_(-1.0, 1.0)
+
+        model_mean, posterior_variance, posterior_log_variance = (
+            self.q_posterior(x_start=x_start, x_t=x, t=t)
+        )
+        return model_mean, posterior_variance, posterior_log_variance, x_start
+
+    # @torch.no_grad()
     def ddim_sample(self, shape, return_all_timesteps=False, condition=None):
         """
         Sample from guided diffusion using ddim sampling.
@@ -102,13 +140,25 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             time_cond = torch.full(
                 (batch,), time, device=device, dtype=torch.long
             )
-            pred_noise, x_start, *_ = self.model_predictions(
-                img,
-                time_cond,
-                condition,
-                clip_x_start=True,
-                rederive_pred_noise=True,
-            )
+
+            if self.with_grad:
+                pred_noise, x_start, *_ = self.model_predictions(
+                    img,
+                    time_cond,
+                    condition,
+                    clip_x_start=True,
+                    rederive_pred_noise=True,
+                )
+            else:
+                with torch.inference_mode():
+                    pred_noise, x_start, *_ = self.model_predictions(
+                        img,
+                        time_cond,
+                        condition,
+                        clip_x_start=True,
+                        rederive_pred_noise=True,
+                    )
+
             if time_next < 0:
                 img = x_start
                 imgs.append(img)

@@ -102,8 +102,11 @@ def load_train_objs(config):
         config.guiding_col is not None
         and config.mode == "Train"
         or config.mode == "Sample"
-        and "guided" in config.sampling_mode
+        and config.sampling_mode == "guided"
     )
+
+    print("use_cond", use_cond)
+
     # Create a U-Net model and a diffusion model based on configuration
     umodel = Unet(
         dim=64,
@@ -111,10 +114,19 @@ def load_train_objs(config):
         channels=len(config.var_indexes),
         self_condition=use_cond,
     )
+
+    use_cond = (
+        config.guiding_col is not None
+        and config.mode == "Train"
+        or config.mode == "Sample"
+        and "guided" in config.sampling_mode
+    )
+
     if use_cond:
         cls = GuidedGaussianDiffusion
     else:
         cls = GaussianDiffusion
+
     model = cls(
         umodel,
         image_size=config.image_size,
@@ -123,6 +135,10 @@ def load_train_objs(config):
         auto_normalize=config.auto_normalize,
         sampling_timesteps=config.ddim_timesteps,
     )
+
+    if config.sampling_mode == "simple_guided":
+        model.enable_grad()
+
     optimizer = torch.optim.Adam(
         model.parameters(), lr=config.lr, betas=config.adam_betas
     )
@@ -233,13 +249,20 @@ def main_sample(config):
         config, path=config.data_dir, csv_file=config.csv_file
     )
     inversion_tf = sample_data.dataset.inversion_transforms
-    data = sample_data if config.sampling_mode!="simple" else None
-    sampler = Sampler(model, config, dataloader=data, inversion_transforms=inversion_tf)
+    data = sample_data if config.sampling_mode != "simple" else None
+    sampler = Sampler(
+        model, config, dataloader=data, inversion_transforms=inversion_tf
+    )
     for i in range(config.n_ensemble):
         if is_main_gpu():
-            logger.info(f"Sampling {i+1} of {config.n_ensemble} : file_format = fake_sample_{i}_" + str(i) + ".npy")
+            logger.info(
+                f"Sampling {i+1} of {config.n_ensemble} : file_format = fake_sample_{i}_"
+                + str(i)
+                + ".npy"
+            )
         file_format = "fake_sample_{i}_" + str(i) + ".npy"
         sampler.sample(filename_format=file_format)
+
 
 def convert_to_type(value, type_list):
     if isinstance(type_list, list):

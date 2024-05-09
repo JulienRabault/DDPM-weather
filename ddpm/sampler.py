@@ -7,6 +7,22 @@ import logging
 from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
+from torch.nn.functional import l1_loss
+
+
+def l1_loss(prediction, target):
+    """
+    Compute L1 loss between prediction and target tensors.
+
+    Args:
+        prediction (torch.Tensor): The prediction tensor.
+        target (torch.Tensor): The target tensor.
+
+    Returns:
+        torch.Tensor: The L1 loss.
+    """
+    loss = torch.mean(torch.abs(prediction - target))
+    return loss
 
 
 class Sampler(Ddpm_base):
@@ -25,9 +41,9 @@ class Sampler(Ddpm_base):
             dataloader: The data loader for input data (optional).
         """
         super().__init__(model, config, dataloader, inversion_transforms)
-        self.loss_func = loss_dict["L1Loss"]
+        # self.loss_func = loss_dict["L1Loss"]
+        self.loss_func = l1_loss
 
-    @torch.no_grad()
     def _simple_guided_sample_batch(
         self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
     ):
@@ -49,26 +65,28 @@ class Sampler(Ddpm_base):
         ).long() * (self.timesteps - 1)
 
         if not random_noise:
-            sample = self.model.q_sample(
-                x_start=truth_sample_batch, t=t_l, noise=noise
-            )
+            with torch.no_grad():
+                sample = self.model.q_sample(
+                    x_start=truth_sample_batch, t=t_l, noise=noise
+                )
         else:
             sample = noise
-
+        
         for t in reversed(range(0, self.timesteps)):
-            sample, _ = self.model.p_sample(sample, t, None)
-            sample = sample.detach().requires_grad_()
+            with torch.no_grad():
+                sample, _ = self.model.p_sample(sample, t, None)
+            sample = sample.requires_grad_()
             loss = (
                 self.loss_func(sample, truth_sample_batch)
                 * guidance_loss_scale
             )
             # Compute the gradient of the loss and update the sample
+            
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
         return sampled_images_unnorm
 
-    @torch.no_grad()
     def sample(self, filename_format="_sample_{i}.npy"):
         """
         Generate and save sample images during training.
@@ -84,16 +102,29 @@ class Sampler(Ddpm_base):
 
             if is_main_gpu():
                 self.logger.info(
-                    f"Sampling {self.config.n_sample * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
-            with tqdm(total=self.config.n_sample // self.config.batch_size, desc="Sampling ", unit="batch",
-                      disable= not is_main_gpu()) as pbar:
+                    f"Sampling {self.config.n_sample * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images..."
+                )
+            with tqdm(
+                total=self.config.n_sample // self.config.batch_size,
+                desc="Sampling ",
+                unit="batch",
+                disable=not is_main_gpu(),
+            ) as pbar:
                 b = 0
                 while b < self.config.n_sample:
-                    batch_size = min(self.config.n_sample - b, self.config.batch_size)
-                    samples = super()._sample_batch(nb_img=batch_size)
+                    batch_size = min(
+                        self.config.n_sample - b, self.config.batch_size
+                    )
+                    with torch.no_grad():
+                        samples = super()._sample_batch(nb_img=batch_size)
                     for s in samples:
                         filename = filename_format.format(i=str(i))
-                        save_path = os.path.join(self.config.output_dir ,self.config.run_name, "samples", filename)
+                        save_path = os.path.join(
+                            self.config.output_dir,
+                            self.config.run_name,
+                            "samples",
+                            filename,
+                        )
                         np.save(save_path, s)
                         i += max(torch.cuda.device_count(), 1)
                     b += batch_size
@@ -101,24 +132,45 @@ class Sampler(Ddpm_base):
         elif "guided" in self.config.sampling_mode:
             if is_main_gpu():
                 self.logger.info(
-                    f"Sampling {len(self.dataloader) * self.config.batch_size * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
-            for batch_idx, batch in tqdm(enumerate(self.dataloader), total=len(self.dataloader), desc="Sampling ", unit="batch"):
-                cond = batch['img'].to(self.gpu_id)
-                ids = batch['img_id']
+                    f"Sampling {len(self.dataloader) * self.config.batch_size * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images..."
+                )
+            for batch_idx, batch in tqdm(
+                enumerate(self.dataloader),
+                total=len(self.dataloader),
+                desc="Sampling ",
+                unit="batch",
+            ):
+                cond = batch["img"].to(self.gpu_id)
+                ids = batch["img_id"]
                 if self.config.sampling_mode == "guided":
-                    samples = self._sample_batch(nb_img=len(cond), condition=cond)
+                    with torch.no_grad():
+                        samples = self._sample_batch(
+                            nb_img=len(cond), condition=cond
+                        )
                 elif self.config.sampling_mode == "simple_guided":
-                    samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
+                    samples = self._simple_guided_sample_batch(
+                        cond,
+                        random_noise=self.config.random_noise,
+                        guidance_loss_scale=self.config.guidance_loss_scale,
+                    )
                 for s, img_id in zip(samples, ids):
                     filename = filename_format.format(i=img_id)
-                    save_path = os.path.join(self.config.output_dir, self.config.run_name, "samples", filename)
+                    save_path = os.path.join(
+                        self.config.output_dir,
+                        self.config.run_name,
+                        "samples",
+                        filename,
+                    )
                     np.save(save_path, s)
 
         else:
-            raise ValueError(f"Sampling mode {self.config.sampling_mode} not supported.")
+            raise ValueError(
+                f"Sampling mode {self.config.sampling_mode} not supported."
+            )
 
         if self.config.plot and is_main_gpu():
             self.plot_grid("last_samples.jpg", samples)
 
         self.logger.info(
-            f"Sampling done. Images saved in {self.config.output_dir}/{self.config.run_name}/samples/")
+            f"Sampling done. Images saved in {self.config.output_dir}/{self.config.run_name}/samples/"
+        )
