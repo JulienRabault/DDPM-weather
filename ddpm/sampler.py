@@ -7,6 +7,7 @@ import logging
 from ddpm.ddpm_base import Ddpm_base
 from utils.distributed import is_main_gpu
 from utils.guided_loss import loss_dict
+from torch.nn.functional import l1_loss
 
 
 def l1_loss(prediction, target):
@@ -20,7 +21,8 @@ def l1_loss(prediction, target):
     Returns:
         torch.Tensor: The L1 loss.
     """
-    return torch.mean(torch.abs(prediction - target))
+    loss = torch.mean(torch.abs(prediction - target))
+    return loss
 
 
 class Sampler(Ddpm_base):
@@ -42,7 +44,6 @@ class Sampler(Ddpm_base):
         # self.loss_func = loss_dict["L1Loss"]
         self.loss_func = l1_loss
 
-    # @torch.no_grad()
     def _simple_guided_sample_batch(
         self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
     ):
@@ -64,29 +65,28 @@ class Sampler(Ddpm_base):
         ).long() * (self.timesteps - 1)
 
         if not random_noise:
-            sample = self.model.q_sample(
-                x_start=truth_sample_batch, t=t_l, noise=noise
-            )
+            with torch.no_grad():
+                sample = self.model.q_sample(
+                    x_start=truth_sample_batch, t=t_l, noise=noise
+                )
         else:
             sample = noise
-
+        
         for t in reversed(range(0, self.timesteps)):
-            sample, _ = self.model.p_sample(sample, t, None)
-            sample = sample.detach().requires_grad_()
+            with torch.no_grad():
+                sample, _ = self.model.p_sample(sample, t, None)
+            sample = sample.requires_grad_()
             loss = (
                 self.loss_func(sample, truth_sample_batch)
                 * guidance_loss_scale
             )
             # Compute the gradient of the loss and update the sample
-            print("loss", loss)
-            print("sample", sample)
-
+            
             cond_grad = -torch.autograd.grad(loss, sample)[0]
             sample = sample.detach() + cond_grad
         sampled_images_unnorm = self.transforms_func(sample).cpu().numpy()
         return sampled_images_unnorm
 
-    @torch.no_grad()
     def sample(self, filename_format="_sample_{i}.npy"):
         """
         Generate and save sample images during training.
@@ -115,7 +115,8 @@ class Sampler(Ddpm_base):
                     batch_size = min(
                         self.config.n_sample - b, self.config.batch_size
                     )
-                    samples = super()._sample_batch(nb_img=batch_size)
+                    with torch.no_grad():
+                        samples = super()._sample_batch(nb_img=batch_size)
                     for s in samples:
                         filename = filename_format.format(i=str(i))
                         save_path = os.path.join(
@@ -142,9 +143,10 @@ class Sampler(Ddpm_base):
                 cond = batch["img"].to(self.gpu_id)
                 ids = batch["img_id"]
                 if self.config.sampling_mode == "guided":
-                    samples = self._sample_batch(
-                        nb_img=len(cond), condition=cond
-                    )
+                    with torch.no_grad():
+                        samples = self._sample_batch(
+                            nb_img=len(cond), condition=cond
+                        )
                 elif self.config.sampling_mode == "simple_guided":
                     samples = self._simple_guided_sample_batch(
                         cond,
