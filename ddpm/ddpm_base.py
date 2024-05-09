@@ -39,6 +39,7 @@ class Ddpm_base:
         if self.snapshot_path is not None:
             if is_main_gpu():
                 self.logger.info(f"Loading snapshot")
+
             self._load_snapshot(self.snapshot_path)
 
         # Move model to GPU
@@ -144,29 +145,36 @@ class Ddpm_base:
             file_name (str): Name of the file to save the plot.
             np_img (numpy.ndarray): Array of images to plot.
         """
+        print("plotting grid")
         nb_image = len(np_img)
-        fig, axes = plt.subplots(
-            nrows=min(6, nb_image),
-            ncols=len(self.config.var_indexes),
-            figsize=(10, 10),
-        )
+        #fig = plt.figure(
+            #nrows=min(6, nb_image),
+            #ncols=len(self.config.var_indexes),
+        #    figsize=(6, 6),
+        #)
         for i in range(min(6, nb_image)):
-            for j in range(len(self.config.var_indexes)):
+            print(i)
+            for j in range(1):
                 cmap = (
-                    "viridis" if self.config.var_indexes[j] != "t2m" else "bwr"
+                    "viridis" if self.config.var_indexes[j] != "t2m" else "coolwarm"
                 )
                 image = np_img[i, j]
                 if len(self.config.var_indexes) > 1 and min(6, nb_image) > 1:
-                    im = axes[i, j].imshow(image, cmap=cmap, origin="lower")
-                    axes[i, j].axis("off")
-                    fig.colorbar(im, ax=axes[i, j])
+                    im = plt.imshow(image, cmap=cmap, origin="lower")
+                    #axes[i, j].axis("off")
+                    #fig.colorbar(im, ax=axes[i, j])
                 else:
-                    im = axes[i].imshow(image, cmap=cmap, origin="lower")
-                    axes[i].axis("off")
-                    fig.colorbar(im, ax=axes[i])
+                    im = plt.imshow(image, cmap=cmap, origin="lower")
+                    #axes[i].axis("off")
+                    #fig.colorbar(im, ax=axes[i])
         # Save the plot to the specified file path
+        print("saving")
         plt.savefig(
-            os.path.join(f"{self.config.output_dir}" , f"{self.config.run_name}", "samples", file_name),
-            bbox_inches="tight",
+            os.path.join(
+                f"{self.config.output_dir}",
+                f"{self.config.run_name}",
+                "samples",
+                file_name,
+            ),
         )
         plt.close()

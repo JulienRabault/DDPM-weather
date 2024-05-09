@@ -113,6 +113,8 @@ Vous pouvez personnaliser le comportement de ce code en modifiant/créant votre 
 - `guided` : Chemin vers les données guidées.
 - `n_sample` : Nombre d'échantillons à générer.
 - `random_noise` : Utiliser du bruit aléatoire pour x_start dans l'échantillonnage guidé.
+- `sampling_mode` : Mode d'échantillonage = ["simple","guided","simple_guided","karras"]
+
 ### Paramètres de Données :
 - `data_dir` : Répertoire contenant les données.
 - `v_i` : Nombre d'indices de variables.
