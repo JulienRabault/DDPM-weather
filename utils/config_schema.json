@@ -150,11 +150,12 @@
       "description": "Size of the input image"
     },
     "scheduler": {
-      "type": [
-        "string",
-        "null"
+      "type": "string",
+      "enum": [
+        "ReduceLROnPlateau",
+        "OneCycleLR"
       ],
-      "default": null,
+      "default": "OneCycleLR",
       "description": "Use scheduler for learning rate during training"
     },
     "scheduler_epoch": {
