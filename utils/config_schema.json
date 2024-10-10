@@ -49,11 +49,11 @@
       "type": "string",
       "enum": [
         "simple",
-        "guided",
-        "simple_guided"
+        "conditioned",
+        "guided"
       ],
       "default": "simple",
-      "description": "Sampling mode: Choose between simple, guided, or simple_guided"
+      "description": "Sampling mode: Choose between simple, conditioned (model trained to approach a condition), or guided (model trained unconditionally)"
     },
     "guiding_col": {
       "type": [
@@ -150,11 +150,12 @@
       "description": "Size of the input image"
     },
     "scheduler": {
-      "type": [
-        "string",
-        "null"
+      "type": "string",
+      "enum": [
+        "ReduceLROnPlateau",
+        "OneCycleLR"
       ],
-      "default": null,
+      "default": "OneCycleLR",
       "description": "Use scheduler for learning rate during training"
     },
     "scheduler_epoch": {

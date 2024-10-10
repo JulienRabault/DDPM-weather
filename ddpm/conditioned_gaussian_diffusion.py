@@ -9,10 +9,10 @@ from torch.nn.functional import mse_loss
 from tqdm import tqdm
 
 
-class GuidedGaussianDiffusion(GaussianDiffusion):
+class ConditionedGaussianDiffusion(GaussianDiffusion):
     def __init__(self, *args, **kwargs):
         """
-        Initialize the GuidedGaussianDiffusion.
+        Initialize the ConditionedGaussianDiffusion.
         Args:
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
@@ -22,7 +22,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def sample(self, batch_size, return_all_timesteps=False, condition=None):
         """
-        Generate samples using guided diffusion.
+        Generate samples using conditioned diffusion.
         Args:
             batch_size (int): Number of samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -37,7 +37,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             else self.ddim_sample
         )
         return sample_fn(
-            (batch_size, channels, image_size, image_size),
+            (batch_size, channels, *image_size),
             return_all_timesteps=return_all_timesteps,
             condition=condition,
         )
@@ -45,7 +45,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def p_sample_loop(self, shape, return_all_timesteps=False, condition=None):
         """
-        Sample from guided diffusion using a loop over timesteps.
+        Sample from conditioned diffusion using a loop over timesteps.
         Args:
             shape: Shape of the samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -71,7 +71,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def ddim_sample(self, shape, return_all_timesteps=False, condition=None):
         """
-        Sample from guided diffusion using ddim sampling.
+        Sample from conditioned diffusion using ddim sampling.
         Args:
             shape: Shape of the samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -138,7 +138,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
         condition=None,
     ):
         """
-        Calculate pixel-wise loss for guided diffusion.
+        Calculate pixel-wise loss for conditioned diffusion.
         Args:
             x_start: Starting image tensor.
             t (int): Timestep.
@@ -183,7 +183,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
 
     def forward(self, img, *args, **kwargs):
         """
-        Forward pass for guided diffusion.
+        Forward pass for conditioned diffusion.
         Args:
             img: Input image tensor.
             *args: Variable length argument list.
@@ -204,7 +204,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             self.image_size,
         )
         assert (
-            h == img_size and w == img_size
+            h == img_size[0] and w == img_size[1]
         ), f"height and width of image must be {img_size}"
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
 
