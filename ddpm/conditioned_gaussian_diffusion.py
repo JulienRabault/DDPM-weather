@@ -9,10 +9,10 @@ from torch.nn.functional import mse_loss
 from tqdm import tqdm
 
 
-class GuidedGaussianDiffusion(GaussianDiffusion):
+class ConditionedGaussianDiffusion(GaussianDiffusion):
     def __init__(self, *args, **kwargs):
         """
-        Initialize the GuidedGaussianDiffusion.
+        Initialize the ConditionedGaussianDiffusion.
         Args:
             *args: Variable length argument list.
             **kwargs: Arbitrary keyword arguments.
@@ -22,7 +22,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def sample(self, batch_size, return_all_timesteps=False, condition=None):
         """
-        Generate samples using guided diffusion.
+        Generate samples using conditioned diffusion.
         Args:
             batch_size (int): Number of samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -45,7 +45,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def p_sample_loop(self, shape, return_all_timesteps=False, condition=None):
         """
-        Sample from guided diffusion using a loop over timesteps.
+        Sample from conditioned diffusion using a loop over timesteps.
         Args:
             shape: Shape of the samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -71,7 +71,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
     @torch.no_grad()
     def ddim_sample(self, shape, return_all_timesteps=False, condition=None):
         """
-        Sample from guided diffusion using ddim sampling.
+        Sample from conditioned diffusion using ddim sampling.
         Args:
             shape: Shape of the samples to generate.
             return_all_timesteps (bool): Whether to return samples at all timesteps.
@@ -107,7 +107,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
                 time_cond,
                 condition,
                 clip_x_start=True,
-                rederive_pred_noise=True,#TODO : pas dans guided_diffusion -> vérifier si nécessaire. 
+                rederive_pred_noise=True,
             )
             if time_next < 0:
                 img = x_start
@@ -138,7 +138,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
         condition=None,
     ):
         """
-        Calculate pixel-wise loss for guided diffusion.
+        Calculate pixel-wise loss for conditioned diffusion.
         Args:
             x_start: Starting image tensor.
             t (int): Timestep.
@@ -183,7 +183,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
 
     def forward(self, img, *args, **kwargs):
         """
-        Forward pass for guided diffusion.
+        Forward pass for conditioned diffusion.
         Args:
             img: Input image tensor.
             *args: Variable length argument list.
