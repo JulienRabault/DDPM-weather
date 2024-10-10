@@ -267,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--yaml_path",
         type=str,
-        default="config_train.yml",
+        default="config/config_train.yml",
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")

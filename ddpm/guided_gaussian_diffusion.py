@@ -37,7 +37,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             else self.ddim_sample
         )
         return sample_fn(
-            (batch_size, channels, image_size, image_size),
+            (batch_size, channels, *image_size),
             return_all_timesteps=return_all_timesteps,
             condition=condition,
         )
@@ -107,7 +107,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
                 time_cond,
                 condition,
                 clip_x_start=True,
-                rederive_pred_noise=True,
+                rederive_pred_noise=True,#TODO : pas dans guided_diffusion -> vérifier si nécessaire. 
             )
             if time_next < 0:
                 img = x_start
@@ -204,7 +204,7 @@ class GuidedGaussianDiffusion(GaussianDiffusion):
             self.image_size,
         )
         assert (
-            h == img_size and w == img_size
+            h == img_size[0] and w == img_size[1]
         ), f"height and width of image must be {img_size}"
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
 
