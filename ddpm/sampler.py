@@ -28,7 +28,7 @@ class Sampler(Ddpm_base):
         self.loss_func = loss_dict["L1Loss"]
 
     @torch.no_grad()
-    def _simple_guided_sample_batch(
+    def _guided_sample_batch(
         self, truth_sample_batch, guidance_loss_scale=100, random_noise=False
     ):
         """
@@ -98,17 +98,18 @@ class Sampler(Ddpm_base):
                         i += max(torch.cuda.device_count(), 1)
                     b += batch_size
                     pbar.update(1)
-        elif "guided" in self.config.sampling_mode:
+        elif "conditioned" in self.config.sampling_mode:
             if is_main_gpu():
                 self.logger.info(
                     f"Sampling {len(self.dataloader) * self.config.batch_size * (torch.cuda.device_count() if torch.cuda.is_available() else 1)} images...")
             for batch_idx, batch in tqdm(enumerate(self.dataloader), total=len(self.dataloader), desc="Sampling ", unit="batch"):
                 cond = batch['img'].to(self.gpu_id)
                 ids = batch['img_id']
-                if self.config.sampling_mode == "guided":
-                    samples = self._sample_batch(nb_img=len(cond), condition=cond)
-                elif self.config.sampling_mode == "simple_guided":
-                    samples = self._simple_guided_sample_batch(cond, random_noise=self.config.random_noise)
+                samples = self._sample_batch(nb_img=len(cond), condition=cond)
+                # if self.config.sampling_mode == "conditioned":
+                #     samples = self._sample_batch(nb_img=len(cond), condition=cond)
+                # elif self.config.sampling_mode == "guided":
+                #     samples = self._guided_sample_batch(cond, random_noise=self.config.random_noise)
                 for s, img_id in zip(samples, ids):
                     filename = filename_format.format(i=img_id)
                     save_path = os.path.join(self.config.output_dir, self.config.run_name, "samples", filename)
