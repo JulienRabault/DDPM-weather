@@ -1,3 +1,7 @@
+### Specific to Jean Zay supercomputer, used to launch jobs
+
+
+
 from idr_pytools import gpu_jobs_submitter, display_slurm_queue, search_log
 import argparse
 

@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
 from ddpm import dataSet_Handler
-from ddpm.guided_gaussian_diffusion import GuidedGaussianDiffusion
+from ddpm.conditioned_gaussian_diffusion import ConditionedGaussianDiffusion
 from ddpm.sampler import Sampler
 from ddpm.trainer import Trainer
 from utils.config import Config
@@ -102,7 +102,7 @@ def load_train_objs(config):
         config.guiding_col is not None
         and config.mode == "Train"
         or config.mode == "Sample"
-        and "guided" in config.sampling_mode
+        and "conditioned" in config.sampling_mode
     )
     # Create a U-Net model and a diffusion model based on configuration
     umodel = Unet(
@@ -112,7 +112,7 @@ def load_train_objs(config):
         self_condition=use_cond,
     )
     if use_cond:
-        cls = GuidedGaussianDiffusion
+        cls = ConditionedGaussianDiffusion
     else:
         cls = GaussianDiffusion
     model = cls(
@@ -267,7 +267,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--yaml_path",
         type=str,
-        default="config_train.yml",
+        default="config/config_train.yml",
         help="Path to YAML configuration file",
     )
     parser.add_argument("--debug", action="store_true", help="Debug logging")
